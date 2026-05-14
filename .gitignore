@@ -1,0 +1,16 @@
+node_modules
+dist
+.next
+.turbo
+*.tsbuildinfo
+
+# Local env
+.env
+.env.local
+
+# User data — never commit
+data/
+
+# OS
+.DS_Store
+Thumbs.db
