@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import express from 'express'
+import express, { type Express } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 
@@ -9,7 +9,7 @@ import { adminRouter } from './routes/admin'
 import { authRouter } from './routes/auth'
 import { errorHandler } from './middleware/errorHandler'
 
-const app = express()
+const app: Express = express()
 
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({

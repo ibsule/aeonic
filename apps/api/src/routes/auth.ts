@@ -1,9 +1,9 @@
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, type Router as RouterType } from 'express'
 import { auth } from 'shared/auth'
 import { db } from 'shared/db'
 import { toNodeHandler } from 'better-auth/node'
 
-export const authRouter = Router()
+export const authRouter: RouterType = Router()
 
 // ── Registration guard ────────────────────────────────────────────────────────
 // Aeonic is single-tenant: only the first user (the admin) can sign up.

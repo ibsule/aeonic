@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Router as RouterType } from 'express'
 import multer from 'multer'
 import crypto from 'crypto'
 import path from 'path'
@@ -9,7 +9,7 @@ import { requireSetup } from '../middleware/requireSetup'
 import { rateLimit } from '../middleware/rateLimit'
 import { isAllowedMimeType } from '../utils/mime'
 
-export const uploadRouter = Router()
+export const uploadRouter: RouterType = Router()
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE ?? '104857600', 10) // 100MB default
 

@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Router as RouterType } from 'express'
 import { db } from 'shared/db'
 import { getStorage } from '../utils/storage'
 import { getMimeType } from '../utils/mime'
@@ -7,7 +7,7 @@ import { requireSetup } from '../middleware/requireSetup'
 import { rateLimit } from '../middleware/rateLimit'
 import { FileListQuerySchema } from 'shared/types'
 
-export const filesRouter = Router()
+export const filesRouter: RouterType = Router()
 
 /**
  * GET /files/:key(*)
