@@ -1,2 +1,2 @@
-# aeonic
-Friendly self-host object store
+# Aeonic
+Self-hosted media storage and transformation platform
