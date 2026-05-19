@@ -49,7 +49,7 @@ app.use(errorHandler)
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✓ Aeonic API running on http://0.0.0.0:${PORT}`)
+  console.log(`  Aeonic API running on http://0.0.0.0:${PORT}`)
   console.log(`  Upload dir : ${process.env.UPLOAD_DIR ?? './uploads'}`)
   console.log(`  Cache dir  : ${process.env.CACHE_DIR ?? './cache'}`)
   console.log(`  DB path    : ${process.env.DB_PATH ?? './data/db.sqlite'}`)
