@@ -9,6 +9,8 @@ docker compose up -d
 All files stored in your VPS.
 
 ---
+
+
 ## Why Aeonic?
 
 Aeonic is a self-hosted media platform built for developers who want direct control over their storage stack.
@@ -26,6 +28,9 @@ so existing projects can migrate with minimal changes.
 Everything is API-first. The dashboard exists for convenience, not as the primary way to use the platform.
 
 ---
+
+> **Note** Still under active development
+
 
 ## Features
 
