@@ -18,7 +18,7 @@ export async function apiKeyAuth(req: Request, res: Response, next: NextFunction
       res.status(401).json({ error: 'Invalid or revoked API key' })
       return
     }
-    res.locals.userId = result.key?.userId
+    res.locals.userId = result.key?.referenceId
     next()
   } catch {
     res.status(401).json({ error: 'Could not verify API key' })
