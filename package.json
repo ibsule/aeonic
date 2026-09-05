@@ -1,19 +1,28 @@
 {
   "name": "aeonic",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint"
+    "build": "turbo run build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "clean": "turbo run clean",
+    "dev": "pnpm build && turbo run dev",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^22.0.0"
+    "@biomejs/biome": "2.5.12",
+    "@types/node": "24.13.3",
+    "turbo": "2.10.12",
+    "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.25.0 <12"
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@11.25.0"
 }

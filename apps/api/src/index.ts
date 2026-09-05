@@ -1,59 +1,58 @@
-import 'dotenv/config'
-import express, { type Express } from 'express'
-import cors from 'cors'
-import helmet from 'helmet'
+import { buildApp } from './app.js'
+import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
+import { createServiceState } from './state.js'
 
-import { uploadRouter } from './routes/upload'
-import { filesRouter } from './routes/files'
-import { adminRouter } from './routes/admin'
-import { authRouter } from './routes/auth'
-import { errorHandler } from './middleware/errorHandler'
+async function start(): Promise<void> {
+  let config: AppConfig
+  try {
+    config = loadConfig()
+  } catch (error) {
+    const message =
+      error instanceof ConfigurationError ? error.message : 'Unknown configuration error'
+    process.stderr.write(`${JSON.stringify({ level: 'fatal', message })}\n`)
+    process.exitCode = 1
+    return
+  }
 
-const app: Express = express()
+  const state = createServiceState()
+  const app = buildApp({ config, state })
+  let stopping = false
 
-// ── Security headers ──────────────────────────────────────────────────────────
-app.use(helmet({
-  // Allow images to be served cross-origin (needed for the dashboard)
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}))
+  const stop = async (signal: NodeJS.Signals): Promise<void> => {
+    if (stopping) return
+    stopping = true
+    state.markStopping()
+    app.log.info({ signal }, 'shutdown requested')
 
-// ── CORS ──────────────────────────────────────────────────────────────────────
-app.use(cors({
-  origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
-  credentials: true,
-}))
+    const forceShutdown = setTimeout(() => {
+      app.log.fatal({ timeoutMs: config.shutdownTimeoutMs }, 'graceful shutdown timed out')
+      process.exit(1)
+    }, config.shutdownTimeoutMs)
+    forceShutdown.unref()
 
-// ── Body parsing ──────────────────────────────────────────────────────────────
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+    try {
+      await app.close()
+      clearTimeout(forceShutdown)
+      app.log.info('shutdown complete')
+    } catch (error) {
+      clearTimeout(forceShutdown)
+      app.log.error({ err: error }, 'shutdown failed')
+      process.exitCode = 1
+    }
+  }
 
-// ── Health check ──────────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', version: process.env.npm_package_version ?? '0.1.0' })
-})
+  process.once('SIGINT', () => void stop('SIGINT'))
+  process.once('SIGTERM', () => void stop('SIGTERM'))
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/upload', uploadRouter)
-app.use('/files', filesRouter)     // serve + list files
-app.use('/admin', adminRouter)     // stats, setup check
-app.use('/auth', authRouter)       // better-auth handler
+  try {
+    await app.listen({ host: config.host, port: config.port })
+    state.markReady()
+    app.log.info({ version: config.version }, 'Aeonic API ready')
+  } catch (error) {
+    app.log.fatal({ err: error }, 'API startup failed')
+    process.exitCode = 1
+    await app.close()
+  }
+}
 
-// ── 404 ───────────────────────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Not found' })
-})
-
-// ── Error handler (must be last) ──────────────────────────────────────────────
-app.use(errorHandler)
-
-// ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.PORT ?? '3001', 10)
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`  Aeonic API running on http://0.0.0.0:${PORT}`)
-  console.log(`  Upload dir : ${process.env.UPLOAD_DIR ?? './uploads'}`)
-  console.log(`  Cache dir  : ${process.env.CACHE_DIR ?? './cache'}`)
-  console.log(`  DB path    : ${process.env.DB_PATH ?? './data/db.sqlite'}`)
-  console.log(`  Storage    : ${process.env.STORAGE_ENDPOINT ? 'S3-compatible' : 'Local disk'}`)
-})
-
-export default app
+await start()
