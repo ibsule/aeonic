@@ -5,8 +5,12 @@ dist
 *.tsbuildinfo
 
 # Local env
-.env
-.env.local
+.env*
+!.env.example
+
+# Test and runtime output
+coverage/
+*.log
 
 # User data — never commit
 data/

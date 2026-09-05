@@ -1,121 +1,79 @@
 # Aeonic
 
-Self-hosted media storage and transformation platform. Upload, transform, and serve images and video from your own infrastructure with just one command:
+Aeonic is an open-source, self-hosted media platform in active development. The intended product
+will provide storage, transformation, delivery, and optional media intelligence for individual
+developers and small teams.
+
+## Current status
+
+Version 0.2 provides the trustworthy API foundation. It currently ships:
+
+- A Node.js 24 and strict TypeScript 6 workspace.
+- A schema-first Fastify API.
+- Validated environment configuration.
+- Structured JSON logging with credential redaction.
+- Separate liveness and readiness endpoints.
+- RFC 9457-compatible error responses.
+- Automated lint, format, type, test, and build checks.
+
+Uploads, asset delivery, authentication, transformations, the dashboard, Docker Compose, and AI
+features are **not implemented yet**. Earlier experimental routes were removed because they did not
+meet the project's security or reliability requirements.
+
+## Requirements
+
+- Node.js 24 LTS
+- pnpm 11.25.0 through Corepack
+
+## Development
 
 ```bash
-docker compose up -d
+corepack enable
+pnpm install --frozen-lockfile
+pnpm check
+pnpm dev
 ```
 
-All files stored in your VPS.
-
----
-
-
-## Why Aeonic?
-
-Aeonic is a self-hosted media platform built for developers who want direct control over their storage stack.
-
-Most Cloudinary alternatives still depend on S3-compatible storage, which means you’re still relying on an external provider. Aeonic works out of the box with local disk storage instead. Files are stored directly on the machine running the service (`./data/uploads`), with SQLite for metadata and a single Docker container for deployment.
-
-If you later want S3, R2, or another object store, you can enable it through configuration without changing your app architecture.
-
-Aeonic also supports Cloudinary-style transformation URLs like:
-
-`/t/w_800,h_600,c_fill,f_webp/image.png`
-
-so existing projects can migrate with minimal changes.
-
-Everything is API-first. The dashboard exists for convenience, not as the primary way to use the platform.
-
----
-
-> **Note** Still under active development
-
-
-## Features
-
-- Image transformations: Resize, crop, format conversion (WebP, AVIF, JPEG, PNG), quality, blur, rotate
-- Smart format selection: Serve AVIF or WebP automatically based on `Accept` headers
-- On-disk transform cache: transformed variants cached locally, served in under 50ms on repeat requests
-- Video processing: Thumbnail extraction, transcode, clip via FFmpeg
-- Folder namespacing: Organize uploads under logical paths (`products/shoes/...`)
-- API key auth: Create and revoke keys per project or per team member
-- Clean dashboard: Media browser, upload UI, API key management, storage stats
-- Pluggable storage: Local disk by default, S3/R2/MinIO as a drop-in upgrade
-
----
-
-## Quick Start
+The API listens on `http://localhost:3001` by default.
 
 ```bash
-# 1. Clone
-git clone https://github.com/ibsule/aeonic.git
-cd aeonic
-
-# 2. Configure
-cp .env.example .env
-# Edit .env — at minimum, set BETTER_AUTH_SECRET to a random string
-
-# 3. Run
-docker compose up -d
-
-# 4. Open the dashboard
-open http://localhost:3000
-# Create your admin account on first load
+curl http://localhost:3001/health/live
+curl http://localhost:3001/health/ready
 ```
 
----
+Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
+provided by your shell or process supervisor; automatic `.env` file loading is not currently part
+of the runtime.
 
-## Uploading a file
+## Commands
 
-```bash
-curl -X POST http://localhost:3001/upload \
-  -H "Authorization: Bearer mv_your_api_key" \
-  -F "file=@photo.jpg" \
-  -F "folder=products"
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Build workspace dependencies and run development watchers |
+| `pnpm build` | Produce clean ESM output for every package |
+| `pnpm test` | Run the test suite |
+| `pnpm typecheck` | Run strict TypeScript checks |
+| `pnpm lint` | Run static analysis |
+| `pnpm format:check` | Verify formatting |
+| `pnpm check` | Run the complete local/CI quality gate |
+
+## Repository layout
+
+```text
+apps/
+  api/                 Fastify control-plane API
+packages/
+  contracts/           Transport schemas and shared public types
+scripts/               Repository maintenance scripts
 ```
 
-```json
-{
-  "key": "products/1716000000000-a1b2c3.jpg",
-  "url": "http://localhost:3001/files/products/1716000000000-a1b2c3.jpg",
-  "size": 204800,
-  "mime_type": "image/jpeg"
-}
-```
+Architecture research and internal planning are maintained separately from this source repository.
+User-facing documentation will expand only as corresponding behavior ships.
 
-## Transforming a file
+## Contributing
 
-```
-# Resize to 800×600, crop to fill, convert to WebP
-GET /t/w_800,h_600,c_fill,f_webp/products/1716000000000-a1b2c3.jpg
-
-# Square thumbnail, 200px, auto-format
-GET /t/w_200,h_200,c_fill,f_auto/products/1716000000000-a1b2c3.jpg
-```
-
----
-
-## Stack
-
-- **API**: Node.js + Express
-- **Image processing**: Sharp (libvips)
-- **Video processing**: FFmpeg
-- **Database**:  SQLite (better-sqlite3)
-- **Auth**:  better-auth
-- **Dashboard**: Next.js 15
-
----
-
-## Roadmap
-
-- [ ] Webhooks on upload / job complete
-- [ ] Presigned upload URLs (bypass the server for large files)
-- [ ] Multi-user / team support with per-user storage quotas
-- [ ] SDK packages (`@aeonic/js`, `@aeonic/react`)
-- [ ] ARM64 Docker image (Apple Silicon, Raspberry Pi, cheaper ARM VPS)
-
----
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Security issues should follow
+[SECURITY.md](./SECURITY.md).
 
 ## License
 

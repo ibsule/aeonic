@@ -32,6 +32,14 @@ describe('health endpoints', () => {
     assert.equal(response.json().version, 'test-version')
   })
 
+  it('applies API security headers', async () => {
+    const response = await createTestApp().inject({ method: 'GET', url: '/health/live' })
+
+    assert.equal(response.headers['x-content-type-options'], 'nosniff')
+    assert.equal(response.headers['x-frame-options'], 'SAMEORIGIN')
+    assert.equal(response.headers['referrer-policy'], 'no-referrer')
+  })
+
   it('reports an RFC 9457 response until the service is ready', async () => {
     const response = await createTestApp(false).inject({ method: 'GET', url: '/health/ready' })
     const body = response.json()
@@ -86,5 +94,23 @@ describe('unregistered routes', () => {
       assert.equal(response.statusCode, 404, `${url} must remain unavailable`)
       assert.equal(response.json().code, 'route_not_found')
     }
+  })
+})
+
+describe('cross-origin policy', () => {
+  it('does not allow cross-origin access by default in production', async () => {
+    const app = buildApp({
+      config: loadConfig({ NODE_ENV: 'production' }),
+      logger: false,
+    })
+    openApps.push(app)
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health/live',
+      headers: { origin: 'https://untrusted.example' },
+    })
+
+    assert.equal(response.headers['access-control-allow-origin'], undefined)
   })
 })
