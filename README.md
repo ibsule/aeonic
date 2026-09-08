@@ -9,7 +9,7 @@ developers and small teams.
 Version 0.2 provides the trustworthy API foundation. It currently ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
-- A schema-first Fastify API.
+- A contract-validated Express 5 API.
 - Validated environment configuration.
 - Structured JSON logging with credential redaction.
 - Separate liveness and readiness endpoints.
@@ -61,7 +61,7 @@ of the runtime.
 
 ```text
 apps/
-  api/                 Fastify control-plane API
+  api/                 Express control-plane API
 packages/
   contracts/           Transport schemas and shared public types
 scripts/               Repository maintenance scripts

@@ -1,5 +1,6 @@
-import type { ProblemDetails } from '@aeonic/contracts'
-import type { FastifyReply, FastifyRequest } from 'fastify'
+import { problemDetailsSchema, type ProblemDetails } from '@aeonic/contracts'
+import type { Request, Response } from 'express'
+import { sendJson } from './response.js'
 
 interface ProblemOptions {
   status: number
@@ -10,19 +11,21 @@ interface ProblemOptions {
 }
 
 export function sendProblem(
-  request: FastifyRequest,
-  reply: FastifyReply,
+  request: Request,
+  response: Response,
   options: ProblemOptions,
-): FastifyReply {
+): Response {
+  const requestId = String(request.id)
   const problem: ProblemDetails = {
     type: options.type ?? 'about:blank',
     title: options.title,
     status: options.status,
     code: options.code,
-    requestId: request.id,
-    instance: request.url,
+    requestId,
+    instance: request.originalUrl,
     ...(options.detail === undefined ? {} : { detail: options.detail }),
   }
 
-  return reply.code(options.status).type('application/problem+json').send(problem)
+  response.type('application/problem+json')
+  return sendJson(response, options.status, problemDetailsSchema, problem)
 }

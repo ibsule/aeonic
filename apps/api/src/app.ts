@@ -1,68 +1,87 @@
-import { problemDetailsSchema, serviceStatusSchema } from '@aeonic/contracts'
-import cors from '@fastify/cors'
-import helmet from '@fastify/helmet'
-import Fastify, {
-  type FastifyError,
-  type FastifyInstance,
-  type FastifyServerOptions,
-} from 'fastify'
+import cors from 'cors'
+import express, {
+  type ErrorRequestHandler,
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express'
+import helmet from 'helmet'
+import pino, { type Logger } from 'pino'
 import type { AppConfig } from './config.js'
 import { loadConfig } from './config.js'
 import { sendProblem } from './http/problem.js'
-import { registerHealthRoutes } from './routes/health.js'
+import { createAppLogger, createHttpLogger } from './logging.js'
+import { createHealthRouter } from './routes/health.js'
 import { createServiceState, type ServiceState } from './state.js'
 
 export interface BuildAppOptions {
   config?: AppConfig
   state?: ServiceState
-  logger?: FastifyServerOptions['logger']
+  logger?: Logger | false
 }
 
-function loggerOptions(config: AppConfig): NonNullable<FastifyServerOptions['logger']> {
-  return {
-    level: config.logLevel,
-    redact: {
-      paths: [
-        'req.headers.authorization',
-        'req.headers.cookie',
-        'res.headers["set-cookie"]',
-        'body.password',
-        'body.token',
-        'body.apiKey',
-      ],
-      censor: '[redacted]',
-    },
-  }
+interface HttpErrorLike {
+  status?: unknown
+  statusCode?: unknown
+  type?: unknown
 }
 
-export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+function isHttpErrorLike(error: unknown): error is HttpErrorLike {
+  return typeof error === 'object' && error !== null
+}
+
+function errorStatus(error: unknown): number {
+  if (!isHttpErrorLike(error)) return 500
+  const candidate = error.statusCode ?? error.status
+  return typeof candidate === 'number' && candidate >= 400 && candidate <= 599 ? candidate : 500
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'An unexpected error occurred.'
+}
+
+function errorCode(error: unknown, status: number): string {
+  if (isHttpErrorLike(error) && error.type === 'entity.too.large') return 'request_too_large'
+  if (status === 400 && error instanceof SyntaxError) return 'invalid_json'
+  return status >= 500 ? 'internal_error' : 'request_failed'
+}
+
+function errorTitle(status: number): string {
+  if (status === 400) return 'Bad Request'
+  if (status === 413) return 'Payload Too Large'
+  return status >= 500 ? 'Internal Server Error' : 'Request Failed'
+}
+
+export function buildApp(options: BuildAppOptions = {}): Express {
   const config = options.config ?? loadConfig()
   const state = options.state ?? createServiceState(true)
-  const logger = options.logger ?? loggerOptions(config)
-  const app = Fastify({
-    logger,
-    trustProxy: config.trustProxy,
-    bodyLimit: config.maxJsonBodyBytes,
-    requestTimeout: config.requestTimeoutMs,
-    keepAliveTimeout: 72_000,
-    connectionTimeout: 10_000,
-  })
+  const logger =
+    options.logger === false
+      ? pino({ level: 'silent' })
+      : (options.logger ?? createAppLogger(config))
+  const app = express()
 
-  app.addSchema(problemDetailsSchema)
-  app.addSchema(serviceStatusSchema)
+  app.disable('x-powered-by')
+  app.set('trust proxy', config.trustProxy)
+  app.use(createHttpLogger(logger))
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+    }),
+  )
+  app.use(
+    cors({
+      origin: config.corsOrigins.length === 0 ? false : [...config.corsOrigins],
+      credentials: config.corsOrigins.length > 0,
+    }),
+  )
+  app.use(express.json({ limit: config.maxJsonBodyBytes, strict: true }))
 
-  void app.register(helmet, {
-    global: true,
-    contentSecurityPolicy: false,
-  })
-  void app.register(cors, {
-    origin: config.corsOrigins.length === 0 ? false : [...config.corsOrigins],
-    credentials: config.corsOrigins.length > 0,
-  })
-  void app.register(registerHealthRoutes, { config, state })
+  app.use('/health', createHealthRouter({ config, state }))
 
-  app.setNotFoundHandler((request, reply) =>
-    sendProblem(request, reply, {
+  app.use((request: Request, response: Response) =>
+    sendProblem(request, response, {
       status: 404,
       title: 'Not Found',
       code: 'route_not_found',
@@ -70,9 +89,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }),
   )
 
-  app.setErrorHandler<FastifyError>((error, request, reply) => {
-    const isValidationError = error.validation !== undefined
-    const status = isValidationError ? 400 : (error.statusCode ?? 500)
+  const errorHandler: ErrorRequestHandler = (
+    error: unknown,
+    request: Request,
+    response: Response,
+    _next: NextFunction,
+  ) => {
+    const status = errorStatus(error)
+    const detail =
+      status >= 500 && config.environment === 'production'
+        ? 'An unexpected error occurred.'
+        : errorMessage(error)
 
     if (status >= 500) {
       request.log.error({ err: error }, 'request failed')
@@ -80,24 +107,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       request.log.warn({ err: error }, 'request rejected')
     }
 
-    return sendProblem(request, reply, {
+    sendProblem(request, response, {
       status,
-      title: isValidationError
-        ? 'Bad Request'
-        : status >= 500
-          ? 'Internal Server Error'
-          : error.name,
-      code: isValidationError
-        ? 'request_validation_failed'
-        : status >= 500
-          ? 'internal_error'
-          : 'request_failed',
-      detail:
-        status >= 500 && config.environment === 'production'
-          ? 'An unexpected error occurred.'
-          : error.message,
+      title: errorTitle(status),
+      code: errorCode(error, status),
+      detail,
     })
-  })
+  }
+  app.use(errorHandler)
 
   return app
 }

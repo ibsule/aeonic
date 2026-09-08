@@ -1,7 +1,8 @@
-import { problemDetailsSchema, serviceStatusSchema, type ServiceStatus } from '@aeonic/contracts'
-import type { FastifyInstance } from 'fastify'
+import { serviceStatusSchema, type ServiceStatus } from '@aeonic/contracts'
+import { type Request, type Response, Router } from 'express'
 import type { AppConfig } from '../config.js'
 import { sendProblem } from '../http/problem.js'
+import { sendJson } from '../http/response.js'
 import type { ServiceState } from '../state.js'
 
 interface HealthRouteOptions {
@@ -9,52 +10,35 @@ interface HealthRouteOptions {
   state: ServiceState
 }
 
-export async function registerHealthRoutes(
-  app: FastifyInstance,
-  options: HealthRouteOptions,
-): Promise<void> {
-  app.get(
-    '/health/live',
-    {
-      schema: {
-        tags: ['system'],
-        response: { 200: serviceStatusSchema },
-      },
-    },
-    async (): Promise<ServiceStatus> => ({
+export function createHealthRouter(options: HealthRouteOptions): Router {
+  const router = Router()
+
+  router.get('/live', (_request: Request, response: Response) => {
+    const body: ServiceStatus = {
       status: 'ok',
       version: options.config.version,
       timestamp: new Date().toISOString(),
-    }),
-  )
+    }
+    return sendJson(response, 200, serviceStatusSchema, body)
+  })
 
-  app.get(
-    '/health/ready',
-    {
-      schema: {
-        tags: ['system'],
-        response: {
-          200: serviceStatusSchema,
-          503: problemDetailsSchema,
-        },
-      },
-    },
-    async (request, reply) => {
-      if (!options.state.isReady()) {
-        return sendProblem(request, reply, {
-          status: 503,
-          title: 'Service unavailable',
-          code: 'service_not_ready',
-          detail: 'The service has not completed startup or is shutting down.',
-        })
-      }
+  router.get('/ready', (request: Request, response: Response) => {
+    if (!options.state.isReady()) {
+      return sendProblem(request, response, {
+        status: 503,
+        title: 'Service unavailable',
+        code: 'service_not_ready',
+        detail: 'The service has not completed startup or is shutting down.',
+      })
+    }
 
-      const response: ServiceStatus = {
-        status: 'ready',
-        version: options.config.version,
-        timestamp: new Date().toISOString(),
-      }
-      return reply.send(response)
-    },
-  )
+    const body: ServiceStatus = {
+      status: 'ready',
+      version: options.config.version,
+      timestamp: new Date().toISOString(),
+    }
+    return sendJson(response, 200, serviceStatusSchema, body)
+  })
+
+  return router
 }

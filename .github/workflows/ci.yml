@@ -17,6 +17,8 @@ jobs:
     name: Quality gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TURBO_TELEMETRY_DISABLED: 1
 
     steps:
       - name: Check out repository
