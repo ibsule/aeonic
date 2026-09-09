@@ -6,7 +6,7 @@ developers and small teams.
 
 ## Current status
 
-Version 0.2 provides the trustworthy API foundation, and Phase 2 control-plane work is underway.
+*Version 0.2* provides the trustworthy API foundation, and Phase 2 control-plane work is underway.
 It currently ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
