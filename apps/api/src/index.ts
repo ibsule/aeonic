@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { buildApp } from './app.js'
 import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
+import { openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
 import { createServiceState } from './state.js'
 
@@ -38,6 +39,8 @@ async function start(): Promise<void> {
   }
 
   const logger = createAppLogger(config)
+  const database = openDatabase(config)
+  database.migrate()
   const state = createServiceState()
   const app = buildApp({ config, state, logger })
   const server = createServer(app)
@@ -62,6 +65,7 @@ async function start(): Promise<void> {
 
     try {
       await close(server)
+      database.close()
       clearTimeout(forceShutdown)
       logger.info('shutdown complete')
     } catch (error) {
@@ -85,6 +89,7 @@ async function start(): Promise<void> {
     logger.fatal({ err: error }, 'API startup failed')
     process.exitCode = 1
     server.closeAllConnections()
+    database.close()
   }
 }
 

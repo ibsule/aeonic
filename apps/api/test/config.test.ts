@@ -11,6 +11,9 @@ describe('configuration', () => {
     assert.equal(config.port, 3001)
     assert.deepEqual(config.corsOrigins, ['http://localhost:3000'])
     assert.equal(config.trustProxy, false)
+    assert.equal(config.databasePath, 'data/aeonic.db')
+    assert.equal(config.databaseBusyTimeoutMs, 5_000)
+    assert.equal(config.databaseWalAutocheckpointPages, 1_000)
   })
 
   it('does not enable cross-origin access by default in production', () => {

@@ -10,6 +10,9 @@ const environmentSchema = z.object({
   REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
   MAX_JSON_BODY_BYTES: z.coerce.number().int().min(1_024).max(10_485_760).default(1_048_576),
+  DATABASE_PATH: z.string().trim().min(1).default('data/aeonic.db'),
+  DATABASE_BUSY_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
+  DATABASE_WAL_AUTOCHECKPOINT_PAGES: z.coerce.number().int().min(1).max(100_000).default(1_000),
   AEONIC_VERSION: z.string().trim().min(1).default('0.2.0'),
 })
 
@@ -23,6 +26,9 @@ export interface AppConfig {
   readonly requestTimeoutMs: number
   readonly shutdownTimeoutMs: number
   readonly maxJsonBodyBytes: number
+  readonly databasePath: string
+  readonly databaseBusyTimeoutMs: number
+  readonly databaseWalAutocheckpointPages: number
   readonly version: string
 }
 
@@ -79,6 +85,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     requestTimeoutMs: value.REQUEST_TIMEOUT_MS,
     shutdownTimeoutMs: value.SHUTDOWN_TIMEOUT_MS,
     maxJsonBodyBytes: value.MAX_JSON_BODY_BYTES,
+    databasePath: value.DATABASE_PATH,
+    databaseBusyTimeoutMs: value.DATABASE_BUSY_TIMEOUT_MS,
+    databaseWalAutocheckpointPages: value.DATABASE_WAL_AUTOCHECKPOINT_PAGES,
     version: value.AEONIC_VERSION,
   })
 }
