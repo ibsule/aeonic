@@ -8,6 +8,7 @@ import {
   auditEvents,
   member,
   organization,
+  projectMembers,
   projects,
   systemSettings,
   user,
@@ -103,6 +104,17 @@ export class SetupService {
             createdBy: result.userId,
             createdAt: now,
             updatedAt: now,
+          })
+          .run()
+        transaction
+          .insert(projectMembers)
+          .values({
+            id: uuidv7(),
+            organizationId: result.organizationId,
+            projectId: result.projectId,
+            userId: result.userId,
+            createdBy: result.userId,
+            createdAt: now,
           })
           .run()
         transaction

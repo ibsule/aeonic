@@ -26,11 +26,61 @@ export const projects = sqliteTable(
       .references(() => authSchema.user.id, { onDelete: 'restrict' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(1),
+    deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
   },
   (table) => [
     uniqueIndex('projects_organization_slug_unique').on(table.organizationId, table.slug),
     uniqueIndex('projects_id_organization_unique').on(table.id, table.organizationId),
     index('projects_organization_id_idx').on(table.organizationId),
+  ],
+)
+
+export const projectMembers = sqliteTable(
+  'project_members',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('project_members_project_user_unique').on(table.projectId, table.userId),
+    index('project_members_user_organization_idx').on(table.userId, table.organizationId),
+  ],
+)
+
+export const projectApiKeys = sqliteTable(
+  'project_api_keys',
+  {
+    keyId: text('key_id')
+      .primaryKey()
+      .references(() => authSchema.apikey.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    index('project_api_keys_project_idx').on(table.organizationId, table.projectId),
+    index('project_api_keys_created_by_idx').on(table.createdBy),
   ],
 )
 
@@ -61,6 +111,8 @@ export const auditEvents = sqliteTable(
 export const schema = {
   ...authSchema,
   auditEvents,
+  projectMembers,
+  projectApiKeys,
   projects,
   systemSettings,
 }

@@ -1,5 +1,4 @@
 import { apiKey } from '@better-auth/api-key'
-import type { BetterAuthPlugin } from 'better-auth'
 import { organization } from 'better-auth/plugins'
 import {
   accessControl,
@@ -10,7 +9,10 @@ import {
   viewerRole,
 } from './permissions.js'
 
-export function createAuthPlugins(): BetterAuthPlugin[] {
+type OrganizationPlugin = ReturnType<typeof organization>
+type ApiKeyPlugin = ReturnType<typeof apiKey>
+
+export function createAuthPlugins(): [OrganizationPlugin, ApiKeyPlugin] {
   return [
     organization({
       ac: accessControl,
@@ -22,6 +24,11 @@ export function createAuthPlugins(): BetterAuthPlugin[] {
     apiKey({
       references: 'organization',
       enableSessionForAPIKeys: false,
+      enableMetadata: true,
+      keyExpiration: {
+        minExpiresIn: 1 / 24,
+        maxExpiresIn: 365,
+      },
       permissions: {
         defaultPermissions: {
           project: ['read'],

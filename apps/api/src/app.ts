@@ -10,13 +10,20 @@ import helmet from 'helmet'
 import pino, { type Logger } from 'pino'
 import { toNodeHandler } from 'better-auth/node'
 import type { AuthService } from './auth/auth.js'
+import { ApiKeyService } from './api-keys/service.js'
 import type { AppConfig } from './config.js'
 import type { DatabaseConnection } from './db/database.js'
+import { ApiError } from './http/api-error.js'
 import { loadConfig } from './config.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
 import { createHealthRouter } from './routes/health.js'
+import { createApiKeysRouter } from './routes/api-keys.js'
+import { createProjectsRouter } from './routes/projects.js'
+import { createProjectMembersRouter } from './routes/project-members.js'
 import { createSetupRouter } from './routes/setup.js'
+import { ProjectService } from './projects/service.js'
+import { ProjectMemberService } from './projects/members.js'
 import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
 
@@ -39,6 +46,7 @@ function isHttpErrorLike(error: unknown): error is HttpErrorLike {
 }
 
 function errorStatus(error: unknown): number {
+  if (error instanceof ApiError) return error.status
   if (!isHttpErrorLike(error)) return 500
   const candidate = error.statusCode ?? error.status
   return typeof candidate === 'number' && candidate >= 400 && candidate <= 599 ? candidate : 500
@@ -49,6 +57,7 @@ function errorMessage(error: unknown): string {
 }
 
 function errorCode(error: unknown, status: number): string {
+  if (error instanceof ApiError) return error.code
   if (isHttpErrorLike(error) && error.type === 'entity.too.large') return 'request_too_large'
   if (status === 400 && error instanceof SyntaxError) return 'invalid_json'
   return status >= 500 ? 'internal_error' : 'request_failed'
@@ -91,6 +100,24 @@ export function buildApp(options: BuildAppOptions = {}): Express {
   app.use('/health', createHealthRouter({ config, state }))
   if (options.database) {
     app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))
+    if (options.auth) {
+      const projects = new ProjectService(options.database)
+      app.use('/api/v1', createProjectsRouter(options.auth, projects))
+      app.use(
+        '/api/v1',
+        createProjectMembersRouter(
+          options.auth,
+          new ProjectMemberService(options.database, projects),
+        ),
+      )
+      app.use(
+        '/api/v1',
+        createApiKeysRouter(
+          options.auth,
+          new ApiKeyService(options.database, options.auth, projects),
+        ),
+      )
+    }
   }
 
   app.use((request: Request, response: Response) =>
@@ -122,7 +149,7 @@ export function buildApp(options: BuildAppOptions = {}): Express {
 
     sendProblem(request, response, {
       status,
-      title: errorTitle(status),
+      title: error instanceof ApiError ? error.title : errorTitle(status),
       code: errorCode(error, status),
       detail,
     })
