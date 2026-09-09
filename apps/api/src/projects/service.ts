@@ -54,7 +54,7 @@ export function projectEtag(project: Pick<Project, 'id' | 'version'>): string {
 export class ProjectService {
   constructor(private readonly database: DatabaseConnection) {}
 
-  private roleFor(userId: string, organizationId: string): OrganizationRole {
+  organizationRoleFor(userId: string, organizationId: string): OrganizationRole {
     const membership = this.database.db
       .select({ role: member.role })
       .from(member)
@@ -71,7 +71,7 @@ export class ProjectService {
     projectId: string,
     action: ProjectAction,
   ): OrganizationRole {
-    const role = this.roleFor(userId, organizationId)
+    const role = this.organizationRoleFor(userId, organizationId)
     if (!roleAllows(role, action)) throw forbidden()
     if (!roleHasOrganizationWideProjectAccess(role)) {
       const assignment = this.database.db
@@ -91,7 +91,7 @@ export class ProjectService {
   }
 
   list(userId: string, organizationId: string): ProjectList {
-    const role = this.roleFor(userId, organizationId)
+    const role = this.organizationRoleFor(userId, organizationId)
     const selection = {
       id: projects.id,
       organizationId: projects.organizationId,
@@ -159,7 +159,7 @@ export class ProjectService {
     input: CreateProjectRequest,
     requestId: string,
   ): Project {
-    const role = this.roleFor(userId, organizationId)
+    const role = this.organizationRoleFor(userId, organizationId)
     if (!roleAllows(role, 'create')) throw forbidden()
     const now = new Date()
     const row: ProjectRow = {

@@ -1,5 +1,11 @@
 export { serviceStatusSchema, type ServiceStatus } from './health.js'
 export {
+  type AuditEvent,
+  auditEventListSchema,
+  type AuditEventList,
+  auditEventSchema,
+} from './audit-events.js'
+export {
   type ApiKey,
   apiKeyListSchema,
   type ApiKeyList,

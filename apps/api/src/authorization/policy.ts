@@ -1,5 +1,11 @@
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
-export type ProjectAction = 'create' | 'read' | 'update' | 'delete' | 'manage_api_keys'
+export type ProjectAction =
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'manage_api_keys'
+  | 'read_audit'
 
 const rolePriority: Record<OrganizationRole, number> = {
   viewer: 0,
@@ -9,8 +15,8 @@ const rolePriority: Record<OrganizationRole, number> = {
 }
 
 const allowedActions: Record<OrganizationRole, readonly ProjectAction[]> = {
-  owner: ['create', 'read', 'update', 'delete', 'manage_api_keys'],
-  admin: ['create', 'read', 'update', 'delete', 'manage_api_keys'],
+  owner: ['create', 'read', 'update', 'delete', 'manage_api_keys', 'read_audit'],
+  admin: ['create', 'read', 'update', 'delete', 'manage_api_keys', 'read_audit'],
   developer: ['read', 'manage_api_keys'],
   viewer: ['read'],
 }

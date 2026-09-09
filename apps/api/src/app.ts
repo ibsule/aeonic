@@ -11,6 +11,8 @@ import pino, { type Logger } from 'pino'
 import { toNodeHandler } from 'better-auth/node'
 import type { AuthService } from './auth/auth.js'
 import { ApiKeyService } from './api-keys/service.js'
+import { SqliteAuditRepository } from './audit/repository.js'
+import { AuditService } from './audit/service.js'
 import type { AppConfig } from './config.js'
 import type { DatabaseConnection } from './db/database.js'
 import { ApiError } from './http/api-error.js'
@@ -19,6 +21,7 @@ import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
 import { createHealthRouter } from './routes/health.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
+import { createAuditEventsRouter } from './routes/audit-events.js'
 import { createProjectsRouter } from './routes/projects.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
 import { createSetupRouter } from './routes/setup.js'
@@ -115,6 +118,13 @@ export function buildApp(options: BuildAppOptions = {}): Express {
         createApiKeysRouter(
           options.auth,
           new ApiKeyService(options.database, options.auth, projects),
+        ),
+      )
+      app.use(
+        '/api/v1',
+        createAuditEventsRouter(
+          options.auth,
+          new AuditService(new SqliteAuditRepository(options.database), projects),
         ),
       )
     }

@@ -36,6 +36,13 @@
       "when": 1788951236256,
       "tag": "0004_narrow_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788952090769,
+      "tag": "0005_clammy_the_anarchist",
+      "breakpoints": true
     }
   ]
 }
