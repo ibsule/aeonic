@@ -23,7 +23,25 @@ function createTestApp() {
   databases.push(database)
   database.migrate()
   const auth = createAuth(config, database)
-  return { app: buildApp({ config, auth, logger: false }), database }
+  return { app: buildApp({ config, auth, database, logger: false }), database }
+}
+
+async function initializeOwner(app: ReturnType<typeof buildApp>) {
+  const setup = await request(app).post('/api/v1/setup').send({
+    name: 'Project Owner',
+    email: 'owner@example.com',
+    password: 'a-strong-development-password',
+    organizationName: 'Example Studio',
+    organizationSlug: 'example-studio',
+    projectName: 'Media Library',
+    projectSlug: 'media-library',
+  })
+  const agent = request.agent(app)
+  await agent.post('/api/auth/sign-in/email').send({
+    email: 'owner@example.com',
+    password: 'a-strong-development-password',
+  })
+  return { agent, organizationId: setup.body.organizationId as string }
 }
 
 describe('authentication', () => {
@@ -71,11 +89,68 @@ describe('authentication', () => {
       password: 'a-strong-development-password',
     })
 
-    const response = await agent.post('/api/auth/organization/create').send({
-      name: 'Unapproved Organization',
-      slug: 'unapproved-organization',
-    })
+    const response = await agent
+      .post('/api/auth/organization/create')
+      .set('origin', 'http://localhost:3001')
+      .send({
+        name: 'Unapproved Organization',
+        slug: 'unapproved-organization',
+      })
 
     assert.equal(response.status, 403)
+  })
+
+  it('supports audited organization invitations and custom roles', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const invited = request.agent(app)
+    await invited.post('/api/auth/sign-up/email').send({
+      name: 'Developer',
+      email: 'developer@example.com',
+      password: 'a-strong-development-password',
+    })
+
+    const invitation = await owner.agent
+      .post('/api/auth/organization/invite-member')
+      .set('origin', 'http://localhost:3001')
+      .send({
+        email: 'developer@example.com',
+        role: 'developer',
+        organizationId: owner.organizationId,
+      })
+    assert.equal(invitation.status, 200, JSON.stringify(invitation.body))
+    assert.equal(invitation.body.role, 'developer')
+
+    const accepted = await invited
+      .post('/api/auth/organization/accept-invitation')
+      .set('origin', 'http://localhost:3001')
+      .send({
+        invitationId: invitation.body.id,
+      })
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body))
+    assert.equal(accepted.body.member.role, 'developer')
+
+    const auditActions = database.client
+      .prepare(
+        "select action from audit_events where action like 'organization.%' order by created_at, id",
+      )
+      .pluck()
+      .all()
+    assert.deepEqual(auditActions, [
+      'organization.invitation_created',
+      'organization.invitation_accepted',
+    ])
+  })
+
+  it('keeps organization deletion disabled', async () => {
+    const { app } = createTestApp()
+    const owner = await initializeOwner(app)
+    const response = await owner.agent
+      .post('/api/auth/organization/delete')
+      .set('origin', 'http://localhost:3001')
+      .send({
+        organizationId: owner.organizationId,
+      })
+    assert.equal(response.status, 404)
   })
 })

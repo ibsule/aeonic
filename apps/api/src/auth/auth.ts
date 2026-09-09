@@ -75,7 +75,24 @@ export function createAuth(config: AppConfig, database: DatabaseConnection): Aut
       },
       useSecureCookies: config.environment === 'production',
     },
-    plugins: createAuthPlugins(),
+    plugins: createAuthPlugins((event) => {
+      const now = new Date()
+      database.db
+        .insert(databaseSchema.auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: event.organizationId,
+          actorType: event.actorType,
+          actorId: event.actorId,
+          action: event.action,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          requestId: uuidv7(),
+          summary: event.summary ?? null,
+          createdAt: now,
+        })
+        .run()
+    }),
     telemetry: {
       enabled: false,
     },
