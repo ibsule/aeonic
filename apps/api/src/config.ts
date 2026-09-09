@@ -13,6 +13,8 @@ const environmentSchema = z.object({
   DATABASE_PATH: z.string().trim().min(1).default('data/aeonic.db'),
   DATABASE_BUSY_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
   DATABASE_WAL_AUTOCHECKPOINT_PAGES: z.coerce.number().int().min(1).max(100_000).default(1_000),
+  BETTER_AUTH_SECRET: z.string().min(32).optional(),
+  BETTER_AUTH_URL: z.url().optional(),
   AEONIC_VERSION: z.string().trim().min(1).default('0.2.0'),
 })
 
@@ -29,6 +31,8 @@ export interface AppConfig {
   readonly databasePath: string
   readonly databaseBusyTimeoutMs: number
   readonly databaseWalAutocheckpointPages: number
+  readonly authSecret: string
+  readonly authBaseUrl: string
   readonly version: string
 }
 
@@ -75,6 +79,26 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
 
   const value = parsed.data
+  const authSecret = value.BETTER_AUTH_SECRET ?? 'development-only-change-before-production'
+  if (value.NODE_ENV === 'production' && value.BETTER_AUTH_SECRET === undefined) {
+    throw new ConfigurationError(
+      'Invalid configuration: BETTER_AUTH_SECRET is required in production',
+    )
+  }
+
+  const authBaseUrl = value.BETTER_AUTH_URL ?? `http://localhost:${value.PORT}`
+  const parsedAuthBaseUrl = new URL(authBaseUrl)
+  if (parsedAuthBaseUrl.origin !== authBaseUrl) {
+    throw new ConfigurationError(
+      'Invalid configuration: BETTER_AUTH_URL must be an HTTP origin without a path',
+    )
+  }
+  if (value.NODE_ENV === 'production' && parsedAuthBaseUrl.protocol !== 'https:') {
+    throw new ConfigurationError(
+      'Invalid configuration: BETTER_AUTH_URL must use HTTPS in production',
+    )
+  }
+
   return Object.freeze({
     environment: value.NODE_ENV,
     host: value.HOST,
@@ -88,6 +112,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     databasePath: value.DATABASE_PATH,
     databaseBusyTimeoutMs: value.DATABASE_BUSY_TIMEOUT_MS,
     databaseWalAutocheckpointPages: value.DATABASE_WAL_AUTOCHECKPOINT_PAGES,
+    authSecret,
+    authBaseUrl,
     version: value.AEONIC_VERSION,
   })
 }

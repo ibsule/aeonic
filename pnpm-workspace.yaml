@@ -2,6 +2,10 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+overrides:
+  'esbuild@<=0.24.2': 0.25.12
+
 allowBuilds:
+  '@prisma/client': false
   better-sqlite3: true
   esbuild: true

@@ -27,6 +27,13 @@ export function assertResponseMatches(schema: object, body: unknown): void {
   }
 }
 
+export function matchesSchema<T>(schema: object, value: unknown): value is T {
+  const existingValidator = validators.get(schema)
+  const validate = existingValidator ?? ajv.compile(schema as AnySchema)
+  if (!existingValidator) validators.set(schema, validate)
+  return validate(value) === true
+}
+
 export function sendJson<T>(response: Response, status: number, schema: object, body: T): Response {
   assertResponseMatches(schema, body)
   return response.status(status).json(body)

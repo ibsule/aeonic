@@ -6,7 +6,8 @@ developers and small teams.
 
 ## Current status
 
-Version 0.2 provides the trustworthy API foundation. It currently ships:
+Version 0.2 provides the trustworthy API foundation, and Phase 2 control-plane work is underway.
+It currently ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -15,10 +16,15 @@ Version 0.2 provides the trustworthy API foundation. It currently ships:
 - Separate liveness and readiness endpoints.
 - RFC 9457-compatible error responses.
 - Automated lint, format, type, test, and build checks.
+- SQLite persistence with reviewed Drizzle migrations and WAL-mode safety controls.
+- Better Auth email/password sessions, organization roles, and organization-owned API-key support.
+- A race-safe initial setup endpoint that atomically creates the first owner, organization, project,
+  and audit event.
 
-Uploads, asset delivery, authentication, transformations, the dashboard, Docker Compose, and AI
-features are **not implemented yet**. Earlier experimental routes were removed because they did not
-meet the project's security or reliability requirements.
+Uploads, asset delivery, transformations, the dashboard, Docker Compose, and AI features are **not
+implemented yet**. The Phase 2 project/API-key control-plane endpoints and published OpenAPI
+reference are still in progress. Earlier experimental routes were removed because they did not meet
+the project's security or reliability requirements.
 
 ## Requirements
 
@@ -39,6 +45,7 @@ The API listens on `http://localhost:3001` by default.
 ```bash
 curl http://localhost:3001/health/live
 curl http://localhost:3001/health/ready
+curl http://localhost:3001/api/v1/setup
 ```
 
 Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
@@ -51,6 +58,9 @@ of the runtime.
 |---|---|
 | `pnpm dev` | Build workspace dependencies and run development watchers |
 | `pnpm build` | Produce clean ESM output for every package |
+| `pnpm --filter @aeonic/api db:migrate` | Apply checked-in database migrations |
+| `pnpm --filter @aeonic/api auth:schema` | Regenerate the Better Auth Drizzle schema |
+| `pnpm --filter @aeonic/api db:generate` | Generate a reviewed migration after schema changes |
 | `pnpm test` | Run the test suite |
 | `pnpm typecheck` | Run strict TypeScript checks |
 | `pnpm lint` | Run static analysis |

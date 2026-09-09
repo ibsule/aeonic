@@ -118,7 +118,11 @@ describe('request failures', () => {
 describe('cross-origin policy', () => {
   it('does not allow cross-origin access by default in production', async () => {
     const app = buildApp({
-      config: loadConfig({ NODE_ENV: 'production' }),
+      config: loadConfig({
+        NODE_ENV: 'production',
+        BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
+        BETTER_AUTH_URL: 'https://media.example.com',
+      }),
       logger: false,
     })
 

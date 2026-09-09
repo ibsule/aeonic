@@ -14,12 +14,30 @@ describe('configuration', () => {
     assert.equal(config.databasePath, 'data/aeonic.db')
     assert.equal(config.databaseBusyTimeoutMs, 5_000)
     assert.equal(config.databaseWalAutocheckpointPages, 1_000)
+    assert.equal(config.authBaseUrl, 'http://localhost:3001')
   })
 
   it('does not enable cross-origin access by default in production', () => {
-    const config = loadConfig({ NODE_ENV: 'production' })
+    const config = loadConfig({
+      NODE_ENV: 'production',
+      BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
+      BETTER_AUTH_URL: 'https://media.example.com',
+    })
 
     assert.deepEqual(config.corsOrigins, [])
+  })
+
+  it('requires secure authentication configuration in production', () => {
+    assert.throws(() => loadConfig({ NODE_ENV: 'production' }), ConfigurationError)
+    assert.throws(
+      () =>
+        loadConfig({
+          NODE_ENV: 'production',
+          BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
+          BETTER_AUTH_URL: 'http://media.example.com',
+        }),
+      ConfigurationError,
+    )
   })
 
   it('rejects invalid ports and origins', () => {

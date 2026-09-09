@@ -8,17 +8,24 @@ import express, {
 } from 'express'
 import helmet from 'helmet'
 import pino, { type Logger } from 'pino'
+import { toNodeHandler } from 'better-auth/node'
+import type { AuthService } from './auth/auth.js'
 import type { AppConfig } from './config.js'
+import type { DatabaseConnection } from './db/database.js'
 import { loadConfig } from './config.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
 import { createHealthRouter } from './routes/health.js'
+import { createSetupRouter } from './routes/setup.js'
+import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
 
 export interface BuildAppOptions {
   config?: AppConfig
   state?: ServiceState
   logger?: Logger | false
+  auth?: AuthService
+  database?: DatabaseConnection
 }
 
 interface HttpErrorLike {
@@ -76,9 +83,15 @@ export function buildApp(options: BuildAppOptions = {}): Express {
       credentials: config.corsOrigins.length > 0,
     }),
   )
+  if (options.auth) {
+    app.all('/api/auth/*splat', toNodeHandler(options.auth))
+  }
   app.use(express.json({ limit: config.maxJsonBodyBytes, strict: true }))
 
   app.use('/health', createHealthRouter({ config, state }))
+  if (options.database) {
+    app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))
+  }
 
   app.use((request: Request, response: Response) =>
     sendProblem(request, response, {

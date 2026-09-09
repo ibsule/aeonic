@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import { buildApp } from './app.js'
+import { createAuth } from './auth/auth.js'
 import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
 import { openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
@@ -41,8 +42,9 @@ async function start(): Promise<void> {
   const logger = createAppLogger(config)
   const database = openDatabase(config)
   database.migrate()
+  const auth = createAuth(config, database)
   const state = createServiceState()
-  const app = buildApp({ config, state, logger })
+  const app = buildApp({ config, state, logger, auth, database })
   const server = createServer(app)
   server.requestTimeout = config.requestTimeoutMs
   server.headersTimeout = Math.min(config.requestTimeoutMs + 1_000, 300_000)
