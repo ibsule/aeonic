@@ -8,10 +8,14 @@ export type StorageNamespace = 'temporary' | 'original' | 'derivative'
 export type StorageObjectKey = string & { readonly [storageObjectKeyBrand]: true }
 export type StorageFailureCode =
   | 'invalid_key'
+  | 'invalid_input'
+  | 'invalid_range'
   | 'not_found'
   | 'already_exists'
   | 'size_exceeded'
+  | 'size_mismatch'
   | 'checksum_mismatch'
+  | 'aborted'
   | 'denied'
   | 'quota_exceeded'
   | 'transient'
@@ -35,8 +39,11 @@ export interface StoredObject {
   sha256: string
 }
 
-export interface StoredObjectMetadata extends StoredObject {
+export interface StoredObjectMetadata {
+  key: StorageObjectKey
+  sizeBytes: number
   modifiedAt: Date
+  sha256?: string
 }
 
 export interface StorageCapacity {
