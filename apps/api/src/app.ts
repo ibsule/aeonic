@@ -20,6 +20,7 @@ import { loadConfig } from './config.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
 import { createHealthRouter } from './routes/health.js'
+import { createDocumentationRouter } from './routes/documentation.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
 import { createAuditEventsRouter } from './routes/audit-events.js'
 import { createProjectsRouter } from './routes/projects.js'
@@ -100,6 +101,7 @@ export function buildApp(options: BuildAppOptions = {}): Express {
   }
   app.use(express.json({ limit: config.maxJsonBodyBytes, strict: true }))
 
+  app.use(createDocumentationRouter(config))
   app.use('/health', createHealthRouter({ config, state }))
   if (options.database) {
     app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))

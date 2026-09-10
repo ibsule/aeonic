@@ -20,11 +20,13 @@ It currently ships:
 - Better Auth email/password sessions, organization roles, and organization-owned API-key support.
 - A race-safe initial setup endpoint that atomically creates the first owner, organization, project,
   and audit event.
+- Tenant-isolated project, membership, project API-key, and audit APIs.
+- OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
 Uploads, asset delivery, transformations, the dashboard, Docker Compose, and AI features are **not
-implemented yet**. The Phase 2 project/API-key control-plane endpoints and published OpenAPI
-reference are still in progress. Earlier experimental routes were removed because they did not meet
-the project's security or reliability requirements.
+implemented yet**. Phase 2 migration rehearsal and completion verification remain in progress.
+Earlier experimental routes were removed because they did not meet the project's security or
+reliability requirements.
 
 ## Requirements
 
@@ -47,6 +49,9 @@ curl http://localhost:3001/health/live
 curl http://localhost:3001/health/ready
 curl http://localhost:3001/api/v1/setup
 ```
+
+Open <http://localhost:3001/docs> for the interactive API reference, or consume the machine-readable
+document at <http://localhost:3001/openapi.json>.
 
 Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
 provided by your shell or process supervisor; automatic `.env` file loading is not currently part
