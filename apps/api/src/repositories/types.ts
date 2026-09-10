@@ -3,9 +3,34 @@ export interface TenantScope {
   projectId: string
 }
 
-export type AssetState = 'pending' | 'ready' | 'failed' | 'deleted'
-export type AssetVersionState = 'pending' | 'ready' | 'failed'
+export type AssetState =
+  | 'uploading'
+  | 'validating'
+  | 'processing'
+  | 'ready'
+  | 'replacing'
+  | 'deleting'
+  | 'deleted'
+  | 'rejected'
+  | 'failed'
+export type AssetVersionState =
+  | 'uploading'
+  | 'validating'
+  | 'processing'
+  | 'ready'
+  | 'rejected'
+  | 'failed'
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type StorageObjectState = 'staging' | 'available' | 'deleting' | 'deleted' | 'failed'
+export type UploadState =
+  | 'created'
+  | 'receiving'
+  | 'validating'
+  | 'completed'
+  | 'rejected'
+  | 'failed'
+  | 'expired'
+  | 'terminated'
 
 export interface AssetRecord extends TenantScope {
   id: string
@@ -29,6 +54,26 @@ export interface JobRecord extends TenantScope {
   maxAttempts: number
 }
 
+export interface StorageObjectRecord extends TenantScope {
+  id: string
+  backend: 'local' | 's3'
+  namespace: 'temporary' | 'original' | 'derivative'
+  objectKey: string
+  state: StorageObjectState
+  sizeBytes: number | null
+  sha256: string | null
+}
+
+export interface UploadRecord extends TenantScope {
+  id: string
+  assetId: string | null
+  storageObjectId: string | null
+  protocol: 'simple' | 'tus'
+  state: UploadState
+  expectedBytes: number | null
+  receivedBytes: number
+}
+
 export interface AssetRepository {
   findById(scope: TenantScope, assetId: string): AssetRecord | null
   listVersions(scope: TenantScope, assetId: string): readonly AssetVersionRecord[]
@@ -37,6 +82,15 @@ export interface AssetRepository {
 export interface JobRepository {
   findById(scope: TenantScope, jobId: string): JobRecord | null
   claimNext(workerId: string, now: Date, leaseUntil: Date): JobRecord | null
+}
+
+export interface StorageObjectRepository {
+  findById(scope: TenantScope, storageObjectId: string): StorageObjectRecord | null
+}
+
+export interface UploadRepository {
+  findById(scope: TenantScope, uploadId: string): UploadRecord | null
+  findByIdempotencyKey(scope: TenantScope, idempotencyKey: string): UploadRecord | null
 }
 
 export interface AuditEventRecord {

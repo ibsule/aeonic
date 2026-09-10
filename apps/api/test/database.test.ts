@@ -195,4 +195,159 @@ describe('database', () => {
       connection.close()
     }
   })
+
+  it('upgrades Phase 2 media records into the explicit upload lifecycle', () => {
+    const connection = openDatabase({
+      databasePath: createDatabasePath(),
+      databaseBusyTimeoutMs: 5_000,
+      databaseWalAutocheckpointPages: 1_000,
+    })
+
+    try {
+      connection.migrate(migrationSubset(5))
+      const now = new Date()
+      const userId = uuidv7()
+      const organizationId = uuidv7()
+      const projectId = uuidv7()
+      const assetId = uuidv7()
+      connection.db
+        .insert(user)
+        .values({ id: userId, name: 'Owner', email: 'media@example.com' })
+        .run()
+      connection.db
+        .insert(organization)
+        .values({ id: organizationId, name: 'Studio', slug: 'media-studio', createdAt: now })
+        .run()
+      connection.db
+        .insert(projects)
+        .values({
+          id: projectId,
+          organizationId,
+          name: 'Library',
+          slug: 'media-library',
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.client
+        .prepare(
+          `insert into assets
+            (id, organization_id, project_id, public_id, name, media_kind, state, created_by, created_at, updated_at)
+           values (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+        )
+        .run(
+          assetId,
+          organizationId,
+          projectId,
+          'legacy-image',
+          'Legacy image',
+          'image',
+          userId,
+          now.getTime(),
+          now.getTime(),
+        )
+      connection.client
+        .prepare(
+          `insert into asset_versions
+            (id, organization_id, project_id, asset_id, version, state, storage_key, created_by, created_at)
+           values (?, ?, ?, ?, 1, 'pending', null, ?, ?)`,
+        )
+        .run(uuidv7(), organizationId, projectId, assetId, userId, now.getTime())
+
+      connection.migrate()
+
+      const assetState = connection.client
+        .prepare('select state from assets where id = ?')
+        .pluck()
+        .get(assetId)
+      const version = connection.client
+        .prepare('select state, storage_object_id from asset_versions where asset_id = ?')
+        .get(assetId) as { state: string; storage_object_id: string | null }
+      const storageTable = connection.client
+        .prepare("select name from sqlite_master where type = 'table' and name = 'storage_objects'")
+        .pluck()
+        .get()
+
+      assert.equal(assetState, 'uploading')
+      assert.deepEqual(version, { state: 'uploading', storage_object_id: null })
+      assert.equal(storageTable, 'storage_objects')
+      assert.deepEqual(connection.client.pragma('foreign_key_check'), [])
+    } finally {
+      connection.close()
+    }
+  })
+
+  it('refuses to discard legacy storage keys during migration', () => {
+    const connection = openDatabase({
+      databasePath: createDatabasePath(),
+      databaseBusyTimeoutMs: 5_000,
+      databaseWalAutocheckpointPages: 1_000,
+    })
+
+    try {
+      connection.migrate(migrationSubset(5))
+      const now = new Date()
+      const userId = uuidv7()
+      const organizationId = uuidv7()
+      const projectId = uuidv7()
+      const assetId = uuidv7()
+      connection.db
+        .insert(user)
+        .values({ id: userId, name: 'Owner', email: 'guard@example.com' })
+        .run()
+      connection.db
+        .insert(organization)
+        .values({ id: organizationId, name: 'Guard', slug: 'guard', createdAt: now })
+        .run()
+      connection.db
+        .insert(projects)
+        .values({
+          id: projectId,
+          organizationId,
+          name: 'Guard',
+          slug: 'guard',
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.client
+        .prepare(
+          `insert into assets
+            (id, organization_id, project_id, public_id, name, media_kind, created_by, created_at, updated_at)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          assetId,
+          organizationId,
+          projectId,
+          'guarded-image',
+          'Guarded image',
+          'image',
+          userId,
+          now.getTime(),
+          now.getTime(),
+        )
+      connection.client
+        .prepare(
+          `insert into asset_versions
+            (id, organization_id, project_id, asset_id, version, storage_key, created_by, created_at)
+           values (?, ?, ?, ?, 1, ?, ?, ?)`,
+        )
+        .run(
+          uuidv7(),
+          organizationId,
+          projectId,
+          assetId,
+          'legacy/path/image.jpg',
+          userId,
+          now.getTime(),
+        )
+
+      assert.throws(() => connection.migrate(), /__asset_versions_storage_key_guard/)
+    } finally {
+      connection.close()
+    }
+  })
 })

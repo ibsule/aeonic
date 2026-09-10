@@ -3,7 +3,15 @@ import { afterEach, describe, it } from 'node:test'
 import { v7 as uuidv7 } from 'uuid'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
-import { assets, jobs, organization, projects, user } from '../src/db/schema.js'
+import {
+  assets,
+  jobs,
+  organization,
+  projects,
+  storageObjects,
+  uploads,
+  user,
+} from '../src/db/schema.js'
 
 const databases: DatabaseConnection[] = []
 
@@ -105,6 +113,93 @@ describe('Phase 2 domain schema', () => {
           })
           .run(),
       /CHECK constraint failed: jobs_progress_range/,
+    )
+  })
+})
+
+describe('Phase 3 storage schema', () => {
+  it('enforces storage object tenant consistency and lifecycle metadata', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(storageObjects)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.secondProjectId,
+            backend: 'local',
+            namespace: 'original',
+            objectKey: `original/${uuidv7()}`,
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /FOREIGN KEY constraint failed/,
+    )
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(storageObjects)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.firstProjectId,
+            backend: 'local',
+            namespace: 'original',
+            objectKey: `original/${uuidv7()}`,
+            state: 'available',
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /CHECK constraint failed: storage_objects_available_metadata/,
+    )
+  })
+
+  it('enforces upload byte and checksum invariants', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(uploads)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.firstProjectId,
+            protocol: 'simple',
+            expectedBytes: 10,
+            receivedBytes: 11,
+            createdBy: tenant.userId,
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /CHECK constraint failed: uploads_received_within_expected/,
+    )
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(uploads)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.firstProjectId,
+            protocol: 'simple',
+            checksumAlgorithm: 'sha256',
+            expectedChecksum: 'not-a-digest',
+            createdBy: tenant.userId,
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /CHECK constraint failed: uploads_expected_checksum_valid/,
     )
   })
 })

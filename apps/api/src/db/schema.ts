@@ -102,6 +102,64 @@ export const projectApiKeys = sqliteTable(
   ],
 )
 
+export const storageObjects = sqliteTable(
+  'storage_objects',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    backend: text('backend', { enum: ['local', 's3'] }).notNull(),
+    namespace: text('namespace', { enum: ['temporary', 'original', 'derivative'] }).notNull(),
+    objectKey: text('object_key').notNull(),
+    state: text('state', { enum: ['staging', 'available', 'deleting', 'deleted', 'failed'] })
+      .notNull()
+      .default('staging'),
+    sizeBytes: integer('size_bytes'),
+    sha256: text('sha256'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    finalizedAt: integer('finalized_at', { mode: 'timestamp_ms' }),
+    deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
+    errorCode: text('error_code'),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'storage_objects_project_organization_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('storage_objects_key_unique').on(table.objectKey),
+    uniqueIndex('storage_objects_id_tenant_unique').on(
+      table.id,
+      table.organizationId,
+      table.projectId,
+    ),
+    index('storage_objects_project_state_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.state,
+    ),
+    check(
+      'storage_objects_size_nonnegative',
+      sql`${table.sizeBytes} IS NULL OR ${table.sizeBytes} >= 0`,
+    ),
+    check(
+      'storage_objects_state_valid',
+      sql`${table.state} IN ('staging', 'available', 'deleting', 'deleted', 'failed')`,
+    ),
+    check(
+      'storage_objects_sha256_valid',
+      sql`${table.sha256} IS NULL OR (length(${table.sha256}) = 64 AND ${table.sha256} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+    check(
+      'storage_objects_available_metadata',
+      sql`${table.state} <> 'available' OR (${table.sizeBytes} IS NOT NULL AND ${table.sha256} IS NOT NULL AND ${table.finalizedAt} IS NOT NULL)`,
+    ),
+  ],
+)
+
 export const assets = sqliteTable(
   'assets',
   {
@@ -117,9 +175,21 @@ export const assets = sqliteTable(
     visibility: text('visibility', { enum: ['private', 'public'] })
       .notNull()
       .default('private'),
-    state: text('state', { enum: ['pending', 'ready', 'failed', 'deleted'] })
+    state: text('state', {
+      enum: [
+        'uploading',
+        'validating',
+        'processing',
+        'ready',
+        'replacing',
+        'deleting',
+        'deleted',
+        'rejected',
+        'failed',
+      ],
+    })
       .notNull()
-      .default('pending'),
+      .default('uploading'),
     currentVersion: integer('current_version').notNull().default(0),
     createdBy: text('created_by')
       .notNull()
@@ -142,6 +212,10 @@ export const assets = sqliteTable(
     ),
     index('assets_project_created_idx').on(table.organizationId, table.projectId, table.createdAt),
     check('assets_current_version_nonnegative', sql`${table.currentVersion} >= 0`),
+    check(
+      'assets_state_valid',
+      sql`${table.state} IN ('uploading', 'validating', 'processing', 'ready', 'replacing', 'deleting', 'deleted', 'rejected', 'failed')`,
+    ),
   ],
 )
 
@@ -155,10 +229,12 @@ export const assetVersions = sqliteTable(
     projectId: text('project_id').notNull(),
     assetId: text('asset_id').notNull(),
     version: integer('version').notNull(),
-    state: text('state', { enum: ['pending', 'ready', 'failed'] })
+    state: text('state', {
+      enum: ['uploading', 'validating', 'processing', 'ready', 'rejected', 'failed'],
+    })
       .notNull()
-      .default('pending'),
-    storageKey: text('storage_key'),
+      .default('uploading'),
+    storageObjectId: text('storage_object_id'),
     sha256: text('sha256'),
     mimeType: text('mime_type'),
     sizeBytes: integer('size_bytes'),
@@ -177,6 +253,11 @@ export const assetVersions = sqliteTable(
       foreignColumns: [assets.id, assets.organizationId, assets.projectId],
       name: 'asset_versions_asset_tenant_fk',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.storageObjectId, table.organizationId, table.projectId],
+      foreignColumns: [storageObjects.id, storageObjects.organizationId, storageObjects.projectId],
+      name: 'asset_versions_storage_object_tenant_fk',
+    }).onDelete('restrict'),
     uniqueIndex('asset_versions_asset_version_unique').on(table.assetId, table.version),
     index('asset_versions_project_created_idx').on(
       table.organizationId,
@@ -187,6 +268,104 @@ export const assetVersions = sqliteTable(
     check(
       'asset_versions_size_nonnegative',
       sql`${table.sizeBytes} IS NULL OR ${table.sizeBytes} >= 0`,
+    ),
+    check(
+      'asset_versions_state_valid',
+      sql`${table.state} IN ('uploading', 'validating', 'processing', 'ready', 'rejected', 'failed')`,
+    ),
+    check(
+      'asset_versions_sha256_valid',
+      sql`${table.sha256} IS NULL OR (length(${table.sha256}) = 64 AND ${table.sha256} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+  ],
+)
+
+export const uploads = sqliteTable(
+  'uploads',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    assetId: text('asset_id'),
+    storageObjectId: text('storage_object_id'),
+    protocol: text('protocol', { enum: ['simple', 'tus'] }).notNull(),
+    state: text('state', {
+      enum: [
+        'created',
+        'receiving',
+        'validating',
+        'completed',
+        'rejected',
+        'failed',
+        'expired',
+        'terminated',
+      ],
+    })
+      .notNull()
+      .default('created'),
+    expectedBytes: integer('expected_bytes'),
+    receivedBytes: integer('received_bytes').notNull().default(0),
+    checksumAlgorithm: text('checksum_algorithm', { enum: ['sha256'] }),
+    expectedChecksum: text('expected_checksum'),
+    actualChecksum: text('actual_checksum'),
+    originalFilename: text('original_filename'),
+    declaredMimeType: text('declared_mime_type'),
+    detectedMimeType: text('detected_mime_type'),
+    idempotencyKey: text('idempotency_key'),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
+    errorCode: text('error_code'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'uploads_project_organization_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.assetId, table.organizationId, table.projectId],
+      foreignColumns: [assets.id, assets.organizationId, assets.projectId],
+      name: 'uploads_asset_tenant_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.storageObjectId, table.organizationId, table.projectId],
+      foreignColumns: [storageObjects.id, storageObjects.organizationId, storageObjects.projectId],
+      name: 'uploads_storage_object_tenant_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('uploads_project_idempotency_unique').on(table.projectId, table.idempotencyKey),
+    index('uploads_project_state_idx').on(table.organizationId, table.projectId, table.state),
+    index('uploads_expiry_idx').on(table.state, table.expiresAt),
+    check(
+      'uploads_expected_bytes_nonnegative',
+      sql`${table.expectedBytes} IS NULL OR ${table.expectedBytes} >= 0`,
+    ),
+    check('uploads_received_bytes_nonnegative', sql`${table.receivedBytes} >= 0`),
+    check(
+      'uploads_received_within_expected',
+      sql`${table.expectedBytes} IS NULL OR ${table.receivedBytes} <= ${table.expectedBytes}`,
+    ),
+    check(
+      'uploads_checksum_pair',
+      sql`(${table.checksumAlgorithm} IS NULL) = (${table.expectedChecksum} IS NULL)`,
+    ),
+    check(
+      'uploads_state_valid',
+      sql`${table.state} IN ('created', 'receiving', 'validating', 'completed', 'rejected', 'failed', 'expired', 'terminated')`,
+    ),
+    check(
+      'uploads_expected_checksum_valid',
+      sql`${table.expectedChecksum} IS NULL OR (length(${table.expectedChecksum}) = 64 AND ${table.expectedChecksum} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+    check(
+      'uploads_actual_checksum_valid',
+      sql`${table.actualChecksum} IS NULL OR (length(${table.actualChecksum}) = 64 AND ${table.actualChecksum} NOT GLOB '*[^0-9a-f]*')`,
     ),
   ],
 )
@@ -266,5 +445,7 @@ export const schema = {
   projectMembers,
   projectApiKeys,
   projects,
+  storageObjects,
   systemSettings,
+  uploads,
 }
