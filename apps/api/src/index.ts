@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { buildApp } from './app.js'
 import { createAuth } from './auth/auth.js'
 import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
-import { openDatabase } from './db/database.js'
+import { type DatabaseConnection, openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
 import { createServiceState } from './state.js'
 
@@ -40,8 +40,16 @@ async function start(): Promise<void> {
   }
 
   const logger = createAppLogger(config)
-  const database = openDatabase(config)
-  database.migrate()
+  let database: DatabaseConnection | undefined
+  try {
+    database = openDatabase(config)
+    database.migrate()
+  } catch (error) {
+    logger.fatal({ err: error }, 'database startup failed')
+    database?.close()
+    process.exitCode = 1
+    return
+  }
   const auth = createAuth(config, database)
   const state = createServiceState()
   const app = buildApp({ config, state, logger, auth, database })

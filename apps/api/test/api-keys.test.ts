@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import request from 'supertest'
+import { v7 as uuidv7 } from 'uuid'
 import { buildApp } from '../src/app.js'
 import { createAuth, type AuthService } from '../src/auth/auth.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
+import { member } from '../src/db/schema.js'
 
 const databases: DatabaseConnection[] = []
 
@@ -99,5 +101,58 @@ describe('project API keys', () => {
 
     assert.equal(response.status, 400)
     assert.equal(response.body.code, 'invalid_request')
+  })
+
+  it('limits developers to assigned projects and API keys they created', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const secondProject = await owner.agent
+      .post(`/api/v1/organizations/${owner.organizationId}/projects`)
+      .send({ name: 'Second Library', slug: 'second-library' })
+    const developer = request.agent(app)
+    const signup = await developer.post('/api/auth/sign-up/email').send({
+      name: 'Developer',
+      email: 'developer-api-keys@example.com',
+      password: 'a-strong-development-password',
+    })
+    const developerId = signup.body.user.id as string
+    database.db
+      .insert(member)
+      .values({
+        id: uuidv7(),
+        organizationId: owner.organizationId,
+        userId: developerId,
+        role: 'developer',
+        createdAt: new Date(),
+      })
+      .run()
+    await owner.agent
+      .post(`/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}/members`)
+      .send({ userId: developerId })
+
+    const collection = `/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}/api-keys`
+    const ownerKey = await owner.agent
+      .post(collection)
+      .send({ name: 'Owner key', scopes: ['assets:read'] })
+    const developerKey = await developer
+      .post(collection)
+      .send({ name: 'Developer key', scopes: ['assets:read'] })
+    assert.equal(developerKey.status, 201)
+
+    const visible = await developer.get(collection)
+    assert.deepEqual(
+      visible.body.items.map((key: { id: string }) => key.id),
+      [developerKey.body.id],
+    )
+    const cannotRevokeOwnerKey = await developer.delete(`${collection}/${ownerKey.body.id}`)
+    assert.equal(cannotRevokeOwnerKey.status, 404)
+    assert.equal((await developer.delete(`${collection}/${developerKey.body.id}`)).status, 204)
+
+    const unassigned = await developer
+      .post(
+        `/api/v1/organizations/${owner.organizationId}/projects/${secondProject.body.id}/api-keys`,
+      )
+      .send({ name: 'Cross-project key', scopes: ['assets:read'] })
+    assert.equal(unassigned.status, 403)
   })
 })

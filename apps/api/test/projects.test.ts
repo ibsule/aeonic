@@ -172,4 +172,42 @@ describe('project control plane', () => {
     )
     assert.equal(noLongerAssigned.status, 403)
   })
+
+  it('gives administrators organization-wide project management access', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const admin = request.agent(app)
+    const signup = await admin.post('/api/auth/sign-up/email').send({
+      name: 'Administrator',
+      email: 'administrator@example.com',
+      password: 'a-strong-development-password',
+    })
+    database.db
+      .insert(member)
+      .values({
+        id: uuidv7(),
+        organizationId: owner.organizationId,
+        userId: signup.body.user.id as string,
+        role: 'admin',
+        createdAt: new Date(),
+      })
+      .run()
+
+    const initial = await admin.get(
+      `/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}`,
+    )
+    assert.equal(initial.status, 200)
+    const etag = initial.headers.etag
+    assert.ok(etag)
+    const updated = await admin
+      .patch(`/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}`)
+      .set('if-match', etag)
+      .send({ name: 'Administered Library' })
+    assert.equal(updated.status, 200)
+
+    const created = await admin
+      .post(`/api/v1/organizations/${owner.organizationId}/projects`)
+      .send({ name: 'Admin Project', slug: 'admin-project' })
+    assert.equal(created.status, 201)
+  })
 })

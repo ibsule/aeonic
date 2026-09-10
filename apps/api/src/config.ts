@@ -15,7 +15,7 @@ const environmentSchema = z.object({
   DATABASE_WAL_AUTOCHECKPOINT_PAGES: z.coerce.number().int().min(1).max(100_000).default(1_000),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.url().optional(),
-  AEONIC_VERSION: z.string().trim().min(1).default('0.2.0'),
+  AEONIC_VERSION: z.string().trim().min(1).default('0.3.0'),
 })
 
 export interface AppConfig {

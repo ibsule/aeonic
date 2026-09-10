@@ -8,7 +8,7 @@ import { createOpenApiDocument } from '../src/openapi/document.js'
 function testConfig() {
   return loadConfig({
     NODE_ENV: 'test',
-    AEONIC_VERSION: '0.2.0-test',
+    AEONIC_VERSION: '0.3.0-test',
     BETTER_AUTH_URL: 'http://localhost:3001',
   })
 }
@@ -21,8 +21,8 @@ describe('API documentation', () => {
 
     assert.equal(response.status, 200)
     assert.match(response.headers['content-type'] ?? '', /^application\/json/)
-    assert.equal(response.body.openapi, '3.1.1')
-    assert.equal(response.body.info.version, '0.2.0-test')
+    assert.equal(response.body.openapi, '3.1.2')
+    assert.equal(response.body.info.version, '0.3.0-test')
     assert.equal(response.body.servers[0].url, 'http://localhost:3001')
 
     const paths = Object.keys(response.body.paths)

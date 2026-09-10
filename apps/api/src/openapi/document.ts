@@ -19,7 +19,7 @@ import {
 import type { AppConfig } from '../config.js'
 
 export interface OpenApiDocument {
-  openapi: '3.1.1'
+  openapi: '3.1.2'
   info: { title: string; version: string; description: string; license: { name: string } }
   jsonSchemaDialect: string
   servers: Array<{ url: string; description: string }>
@@ -84,7 +84,7 @@ const apiKeyCollectionPath = `${projectItemPath}/api-keys`
 
 export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
   return {
-    openapi: '3.1.1',
+    openapi: '3.1.2',
     jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
       title: 'Aeonic API',

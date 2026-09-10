@@ -6,8 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.2* provides the trustworthy API foundation, and Phase 2 control-plane work is underway.
-It currently ships:
+*Version 0.3* provides the trustworthy API foundation and identity/control plane. It currently
+ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -24,7 +24,7 @@ It currently ships:
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
 Uploads, asset delivery, transformations, the dashboard, Docker Compose, and AI features are **not
-implemented yet**. Phase 2 migration rehearsal and completion verification remain in progress.
+implemented yet**. Phase 2 is complete; Phase 3 storage, upload, and delivery work has not started.
 Earlier experimental routes were removed because they did not meet the project's security or
 reliability requirements.
 

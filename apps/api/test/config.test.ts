@@ -15,6 +15,7 @@ describe('configuration', () => {
     assert.equal(config.databaseBusyTimeoutMs, 5_000)
     assert.equal(config.databaseWalAutocheckpointPages, 1_000)
     assert.equal(config.authBaseUrl, 'http://localhost:3001')
+    assert.equal(config.version, '0.3.0')
   })
 
   it('does not enable cross-origin access by default in production', () => {
