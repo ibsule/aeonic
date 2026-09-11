@@ -6,6 +6,7 @@ import { type DatabaseConnection, openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
 import { createServiceState } from './state.js'
 import { createStorageRuntime, type StorageRuntime } from './storage/factory.js'
+import { UploadReconciler } from './uploads/reconciler.js'
 
 function listen(server: Server, config: AppConfig): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -48,6 +49,12 @@ async function start(): Promise<void> {
     database.migrate()
     storage = createStorageRuntime(config)
     await storage.port.initialize()
+    const reconciliation = await new UploadReconciler(database, storage).reconcile(
+      new Date(Date.now() - config.uploadStaleAfterMs),
+    )
+    if (reconciliation.inspected > 0) {
+      logger.info(reconciliation, 'stale uploads reconciled')
+    }
   } catch (error) {
     logger.fatal({ err: error }, 'dependency startup failed')
     storage?.close()

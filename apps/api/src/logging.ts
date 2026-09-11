@@ -11,6 +11,7 @@ export function createAppLogger(config: AppConfig): Logger {
       paths: [
         'req.headers.authorization',
         'req.headers.cookie',
+        'req.headers["x-api-key"]',
         'res.headers["set-cookie"]',
         'body.password',
         'body.token',

@@ -28,9 +28,11 @@ import { createHealthRouter } from './routes/health.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
 import { createProjectsRouter } from './routes/projects.js'
 import { createSetupRouter } from './routes/setup.js'
+import { createUploadsRouter } from './routes/uploads.js'
 import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
 import type { StorageRuntime } from './storage/factory.js'
+import { UploadService } from './uploads/service.js'
 
 export interface BuildAppOptions {
   config?: AppConfig
@@ -109,6 +111,15 @@ export function buildApp(options: BuildAppOptions = {}): Express {
     app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))
     if (options.auth) {
       const projects = new ProjectService(options.database)
+      if (options.storage) {
+        app.use(
+          '/api/v1',
+          createUploadsRouter(
+            options.auth,
+            new UploadService(options.database, projects, options.storage, config),
+          ),
+        )
+      }
       app.use('/api/v1', createProjectsRouter(options.auth, projects))
       app.use(
         '/api/v1',

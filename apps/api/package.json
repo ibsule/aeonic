@@ -28,6 +28,7 @@
     "cors": "2.8.6",
     "drizzle-orm": "0.45.2",
     "express": "5.2.1",
+    "file-type": "22.0.0",
     "helmet": "8.3.0",
     "pino": "10.3.1",
     "pino-http": "11.0.0",
