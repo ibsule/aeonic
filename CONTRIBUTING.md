@@ -15,6 +15,23 @@ pnpm check
 
 Run `pnpm dev` for local development. Copy `.env.example` only when you need to override defaults.
 
+### S3-compatible storage contract
+
+The normal test suite keeps live object-storage tests disabled. To verify an S3-compatible provider,
+create an empty test bucket or allow the suite to create a temporary one, then run:
+
+```bash
+S3_TEST_ENDPOINT=http://127.0.0.1:9000 \
+S3_TEST_ACCESS_KEY=test-access-key \
+S3_TEST_SECRET_KEY=test-secret-key \
+S3_TEST_CREATE_BUCKET=1 \
+pnpm --filter @aeonic/api test:s3
+```
+
+`S3_TEST_BUCKET` and `S3_TEST_REGION` are optional. Never point the suite at a bucket containing
+real data. Insecure HTTP endpoints require an explicit local test URL; production integrations
+should use TLS.
+
 ## Quality requirements
 
 Before opening a pull request:

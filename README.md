@@ -21,12 +21,13 @@ ships:
 - A race-safe initial setup endpoint that atomically creates the first owner, organization, project,
   and audit event.
 - Tenant-isolated project, membership, project API-key, and audit APIs.
+- Tenant-scoped local and S3-compatible storage engines with immutable streaming writes.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Uploads, asset delivery, transformations, the dashboard, Docker Compose, and AI features are **not
-implemented yet**. Phase 2 is complete; Phase 3 storage, upload, and delivery work has not started.
-Earlier experimental routes were removed because they did not meet the project's security or
-reliability requirements.
+Upload endpoints, asset delivery, transformations, the dashboard, Docker Compose, and AI features
+are **not implemented yet**. Phase 3 storage infrastructure is underway, but the engines are not yet
+wired to the public API. Earlier experimental routes were removed because they did not meet the
+project's security or reliability requirements.
 
 ## Requirements
 
@@ -67,6 +68,7 @@ of the runtime.
 | `pnpm --filter @aeonic/api auth:schema` | Regenerate the Better Auth Drizzle schema |
 | `pnpm --filter @aeonic/api db:generate` | Generate a reviewed migration after schema changes |
 | `pnpm test` | Run the test suite |
+| `pnpm --filter @aeonic/api test:s3` | Run the opt-in live S3 compatibility contract |
 | `pnpm typecheck` | Run strict TypeScript checks |
 | `pnpm lint` | Run static analysis |
 | `pnpm format:check` | Verify formatting |

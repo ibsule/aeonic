@@ -12,6 +12,7 @@ import {
   type StorageObjectKey,
 } from '../src/storage/contracts.js'
 import { LocalStorage } from '../src/storage/local-storage.js'
+import { storageContractSuite } from './storage-contract-suite.js'
 
 const temporaryDirectories: string[] = []
 
@@ -42,6 +43,11 @@ async function consume(stream: Readable): Promise<Buffer> {
 function expectStorageCode(code: StorageError['code']): (error: unknown) => boolean {
   return (error) => error instanceof StorageError && error.code === code
 }
+
+storageContractSuite('local storage contract', async () => {
+  const { scope, storage } = await createStorage()
+  return { scope, storage }
+})
 
 describe('local storage', () => {
   it('atomically stores, inspects, and streams immutable objects', async () => {
