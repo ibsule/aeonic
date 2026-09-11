@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node --enable-source-maps dist/index.js",
     "test": "node --import tsx --test test/*.test.ts",
-    "test:s3": "node --import tsx --test test/s3-storage.integration.test.ts",
+    "test:s3": "node --import tsx --test test/*s3*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
