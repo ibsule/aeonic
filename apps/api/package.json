@@ -39,12 +39,12 @@
     "@types/better-sqlite3": "9.6.0",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
-    "@types/node": "24.13.3",
+    "@types/node": "26.5.0",
     "@types/supertest": "7.2.1",
     "auth": "1.7.3",
     "drizzle-kit": "0.31.10",
     "supertest": "7.2.2",
     "tsx": "4.23.13",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }
