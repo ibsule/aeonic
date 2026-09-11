@@ -14,12 +14,13 @@ const actions: readonly ProjectAction[] = [
   'delete',
   'manage_api_keys',
   'read_audit',
+  'upload',
 ]
 
 const expected: Record<OrganizationRole, readonly ProjectAction[]> = {
   owner: actions,
   admin: actions,
-  developer: ['read', 'manage_api_keys'],
+  developer: ['read', 'manage_api_keys', 'upload'],
   viewer: ['read'],
 }
 

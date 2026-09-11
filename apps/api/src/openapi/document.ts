@@ -1,5 +1,6 @@
 import {
   apiKeyListSchema,
+  assignProjectMemberRequestSchema,
   auditEventListSchema,
   createApiKeyRequestSchema,
   createdApiKeySchema,
@@ -13,8 +14,9 @@ import {
   setupRequestSchema,
   setupResultSchema,
   setupStatusSchema,
+  simpleUploadResultSchema,
   updateProjectRequestSchema,
-  assignProjectMemberRequestSchema,
+  uploadQuerySchema,
 } from '@aeonic/contracts'
 import type { AppConfig } from '../config.js'
 
@@ -81,6 +83,7 @@ const projectCollectionPath = '/api/v1/organizations/{organizationId}/projects'
 const projectItemPath = '/api/v1/organizations/{organizationId}/projects/{projectId}'
 const memberCollectionPath = `${projectItemPath}/members`
 const apiKeyCollectionPath = `${projectItemPath}/api-keys`
+const uploadCollectionPath = `${projectItemPath}/uploads`
 
 export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
   return {
@@ -103,6 +106,7 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       { name: 'Project members', description: 'Project access assignments.' },
       { name: 'API keys', description: 'Project-scoped machine credentials.' },
       { name: 'Audit', description: 'Administrator-only audit history.' },
+      { name: 'Uploads', description: 'Bounded, tenant-isolated media ingestion.' },
     ],
     paths: {
       '/health/live': {
@@ -358,6 +362,87 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           responses: { '204': { description: 'API key revoked.' }, ...standardErrors },
         },
       },
+      [uploadCollectionPath]: {
+        post: {
+          operationId: 'createSimpleUpload',
+          tags: ['Uploads'],
+          summary: 'Stream one media file into a processing asset',
+          description:
+            'Requires an exact Content-Length. The declared media type, filename extension, and detected binary signature must agree. Accepted assets remain processing until a media worker completes decoder-level inspection.',
+          security: [{ cookieAuth: [] }, { projectApiKey: [] }],
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            {
+              name: 'filename',
+              in: 'query',
+              required: true,
+              schema: uploadQuerySchema.properties.filename,
+            },
+            { name: 'name', in: 'query', schema: uploadQuerySchema.properties.name },
+            { name: 'folder', in: 'query', schema: uploadQuerySchema.properties.folder },
+            { name: 'visibility', in: 'query', schema: uploadQuerySchema.properties.visibility },
+            {
+              name: 'Content-Length',
+              in: 'header',
+              required: true,
+              schema: { type: 'integer', minimum: 1, maximum: config.uploadMaxBytes },
+            },
+            {
+              name: 'Content-Digest',
+              in: 'header',
+              schema: { type: 'string', pattern: '^sha-256=:[A-Za-z0-9+/]{43}=:$' },
+              description: 'Optional SHA-256 digest using RFC 9530 binary syntax.',
+            },
+            {
+              name: 'Idempotency-Key',
+              in: 'header',
+              schema: { type: 'string', minLength: 8, maxLength: 128 },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: Object.fromEntries(
+              [
+                'image/jpeg',
+                'image/png',
+                'image/gif',
+                'image/webp',
+                'image/avif',
+                'video/mp4',
+                'video/webm',
+                'video/quicktime',
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              ].map((mimeType) => [mimeType, { schema: { type: 'string', format: 'binary' } }]),
+            ),
+          },
+          responses: {
+            '200': jsonResponse(
+              'A completed idempotent upload was replayed.',
+              'SimpleUploadResult',
+              {
+                'Idempotency-Replayed': {
+                  description: 'Always true for this response.',
+                  schema: { type: 'string', const: 'true' },
+                },
+              },
+            ),
+            '201': jsonResponse(
+              'The file was stored and queued for inspection.',
+              'SimpleUploadResult',
+            ),
+            ...standardErrors,
+            '411': response('Problem'),
+            '413': response('Problem'),
+            '415': response('Problem'),
+            '422': response('Problem'),
+            '503': response('Problem'),
+          },
+        },
+      },
       '/api/v1/organizations/{organizationId}/audit-events': {
         get: {
           operationId: 'listAuditEvents',
@@ -457,6 +542,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         CreateApiKeyRequest: component(createApiKeyRequestSchema),
         CreatedApiKey: component(createdApiKeySchema),
         AuditEventList: component(auditEventListSchema),
+        UploadQuery: component(uploadQuerySchema),
+        SimpleUploadResult: component(simpleUploadResultSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

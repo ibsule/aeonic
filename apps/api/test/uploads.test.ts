@@ -159,6 +159,42 @@ describe('simple uploads', () => {
     )
   })
 
+  it('rejects anonymous requests, unsafe filenames, and incorrect checksums', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const path = uploadPath(owner.organizationId, owner.projectId)
+    const anonymous = await request(app)
+      .post(path)
+      .query({ filename: 'pixel.png' })
+      .set('content-type', 'image/png')
+      .send(png)
+    const unsafe = await owner.agent
+      .post(path)
+      .query({ filename: '../pixel.png' })
+      .set('content-type', 'image/png')
+      .send(png)
+    const checksum = await owner.agent
+      .post(path)
+      .query({ filename: 'pixel.png' })
+      .set('content-type', 'image/png')
+      .set('content-digest', `sha-256=:${Buffer.alloc(32).toString('base64')}:`)
+      .send(png)
+
+    assert.equal(anonymous.status, 401)
+    assert.equal(unsafe.status, 400)
+    assert.equal(unsafe.body.code, 'invalid_filename')
+    assert.equal(checksum.status, 422)
+    assert.equal(checksum.body.code, 'checksum_mismatch')
+    assert.equal(database.client.prepare('select count(*) from uploads').pluck().get(), 1)
+    assert.equal(
+      database.client
+        .prepare("select count(*) from audit_events where action = 'upload.rejected'")
+        .pluck()
+        .get(),
+      1,
+    )
+  })
+
   it('enforces project quota before reading a second file', async () => {
     const paddedPng = Buffer.concat([png, Buffer.alloc(600_000 - png.byteLength)])
     const { app, database } = createTestApp({ projectStorageQuotaBytes: 1_048_576 })

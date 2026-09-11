@@ -6,7 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.3* provides the trustworthy API foundation and identity/control plane. It currently
+*Version 0.4 (in development)* provides the trustworthy API foundation, identity/control plane,
+and the first Phase 3 media-ingestion path. It currently
 ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
@@ -22,12 +23,13 @@ ships:
   and audit event.
 - Tenant-isolated project, membership, project API-key, and audit APIs.
 - Tenant-scoped local and S3-compatible storage engines with immutable streaming writes.
+- Streaming simple uploads with size limits, project quota reservations, optional SHA-256 checks,
+  MIME/extension/signature validation, idempotent replay, and interrupted-upload reconciliation.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Upload endpoints, asset delivery, transformations, the dashboard, Docker Compose, and AI features
-are **not implemented yet**. Phase 3 storage infrastructure is underway, but the engines are not yet
-wired to the public API. Earlier experimental routes were removed because they did not meet the
-project's security or reliability requirements.
+Asset delivery, decoder-level media inspection, transformations, the dashboard, Docker Compose,
+and AI features are **not implemented yet**. Accepted uploads remain in `processing` with a durable
+`media.inspect` job until the worker arrives in the next phase task.
 
 ## Requirements
 
@@ -53,6 +55,22 @@ curl http://localhost:3001/api/v1/setup
 
 Open <http://localhost:3001/docs> for the interactive API reference, or consume the machine-readable
 document at <http://localhost:3001/openapi.json>.
+
+The simple-upload endpoint accepts exactly one raw media file per request. For example, after
+signing in and retaining the session cookie:
+
+```bash
+curl --request POST \
+  --cookie cookies.txt \
+  --header 'Content-Type: image/jpeg' \
+  --data-binary @photo.jpg \
+  'http://localhost:3001/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/uploads?filename=photo.jpg'
+```
+
+Service clients can send a project-scoped `assets:write` key in `x-api-key`. Supply
+`Content-Digest: sha-256=:BASE64_DIGEST:` when end-to-end checksum verification is needed. Simple
+uploads require `Content-Length`, default to private visibility, are limited to 100 MiB, and share a
+configurable 10 GiB quota per project.
 
 Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
 provided by your shell or process supervisor; automatic `.env` file loading is not currently part

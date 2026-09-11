@@ -549,6 +549,22 @@ export class UploadService {
         .set({ state: rejected ? 'rejected' : 'failed' })
         .where(eq(assetVersions.id, reservation.assetVersionId))
         .run()
+      transaction
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: reservation.scope.organizationId,
+          projectId: reservation.scope.projectId,
+          actorType: reservation.actorType,
+          actorId: reservation.actorId,
+          action: rejected ? 'upload.rejected' : 'upload.failed',
+          targetType: 'upload',
+          targetId: reservation.uploadId,
+          requestId: reservation.requestId,
+          summary: { reason: error.code, retryable: error.retryable },
+          createdAt: now,
+        })
+        .run()
     })
   }
 
