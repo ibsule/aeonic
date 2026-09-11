@@ -30,10 +30,12 @@ import { createHealthRouter } from './routes/health.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
 import { createProjectsRouter } from './routes/projects.js'
 import { createSetupRouter } from './routes/setup.js'
+import { createStorageRouter } from './routes/storage.js'
 import { createUploadsRouter } from './routes/uploads.js'
 import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
 import type { StorageRuntime } from './storage/factory.js'
+import { StorageService } from './storage/service.js'
 import { UploadService } from './uploads/service.js'
 import { TusUploadService } from './uploads/tus-service.js'
 import { TusStagingStore } from './uploads/tus-staging.js'
@@ -154,6 +156,18 @@ export function buildApp(options: BuildAppOptions = {}): Express {
                 config,
               ),
             config.tusUploadMaxBytes,
+          ),
+        )
+        app.use(
+          '/api/v1',
+          createStorageRouter(
+            options.auth,
+            new StorageService(
+              options.database,
+              projects,
+              options.storage,
+              config.projectStorageQuotaBytes,
+            ),
           ),
         )
       }

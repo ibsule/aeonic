@@ -53,6 +53,12 @@ export {
   setupStatusSchema,
 } from './setup.js'
 export {
+  type ProjectStorageOverview,
+  projectStorageOverviewSchema,
+  type StorageFailureSummary,
+  storageFailureSummarySchema,
+} from './storage.js'
+export {
   type MediaKind,
   mediaKinds,
   type SimpleUploadResult,
