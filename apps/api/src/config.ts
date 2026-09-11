@@ -24,6 +24,19 @@ const environmentSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_PREFIX: z.string().optional(),
   UPLOAD_MAX_BYTES: z.coerce.number().int().min(1_048_576).max(5_368_709_120).default(104_857_600),
+  TUS_STORAGE_PATH: z.string().trim().min(1).default('data/tus'),
+  TUS_UPLOAD_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_048_576)
+    .max(5_368_709_120)
+    .default(5_368_709_120),
+  TUS_UPLOAD_EXPIRATION_MS: z.coerce
+    .number()
+    .int()
+    .min(3_600_000)
+    .max(604_800_000)
+    .default(86_400_000),
   PROJECT_STORAGE_QUOTA_BYTES: z.coerce
     .number()
     .int()
@@ -64,6 +77,9 @@ export interface AppConfig {
   readonly s3SecretAccessKey?: string
   readonly s3Prefix?: string
   readonly uploadMaxBytes: number
+  readonly tusStoragePath: string
+  readonly tusUploadMaxBytes: number
+  readonly tusUploadExpirationMs: number
   readonly projectStorageQuotaBytes: number
   readonly uploadStaleAfterMs: number
   readonly deliveryBaseUrl: string
@@ -238,6 +254,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       : { s3SecretAccessKey: value.S3_SECRET_ACCESS_KEY }),
     ...(value.S3_PREFIX === undefined ? {} : { s3Prefix: value.S3_PREFIX }),
     uploadMaxBytes: value.UPLOAD_MAX_BYTES,
+    tusStoragePath: value.TUS_STORAGE_PATH,
+    tusUploadMaxBytes: value.TUS_UPLOAD_MAX_BYTES,
+    tusUploadExpirationMs: value.TUS_UPLOAD_EXPIRATION_MS,
     projectStorageQuotaBytes: value.PROJECT_STORAGE_QUOTA_BYTES,
     uploadStaleAfterMs: value.UPLOAD_STALE_AFTER_MS,
     deliveryBaseUrl,

@@ -313,6 +313,7 @@ export const uploads = sqliteTable(
     originalFilename: text('original_filename'),
     declaredMimeType: text('declared_mime_type'),
     detectedMimeType: text('detected_mime_type'),
+    uploadMetadata: text('upload_metadata'),
     idempotencyKey: text('idempotency_key'),
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
     errorCode: text('error_code'),
