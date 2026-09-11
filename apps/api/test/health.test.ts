@@ -122,6 +122,7 @@ describe('cross-origin policy', () => {
         NODE_ENV: 'production',
         BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
         BETTER_AUTH_URL: 'https://media.example.com',
+        DELIVERY_SIGNING_KEYS: `primary:${Buffer.alloc(32, 1).toString('base64url')}`,
       }),
       logger: false,
     })

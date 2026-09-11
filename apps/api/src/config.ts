@@ -31,6 +31,10 @@ const environmentSchema = z.object({
     .max(Number.MAX_SAFE_INTEGER)
     .default(10_737_418_240),
   UPLOAD_STALE_AFTER_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(3_600_000),
+  DELIVERY_BASE_URL: z.url().optional(),
+  DELIVERY_SIGNING_KEYS: z.string().optional(),
+  DELIVERY_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+  PUBLIC_DELIVERY_CACHE_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(31_536_000),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.url().optional(),
   AEONIC_VERSION: z.string().trim().min(1).default('0.3.0'),
@@ -62,9 +66,18 @@ export interface AppConfig {
   readonly uploadMaxBytes: number
   readonly projectStorageQuotaBytes: number
   readonly uploadStaleAfterMs: number
+  readonly deliveryBaseUrl: string
+  readonly deliverySigningKeys: readonly DeliverySigningKey[]
+  readonly deliveryUrlTtlSeconds: number
+  readonly publicDeliveryCacheSeconds: number
   readonly authSecret: string
   readonly authBaseUrl: string
   readonly version: string
+}
+
+export interface DeliverySigningKey {
+  readonly id: string
+  readonly secret: string
 }
 
 export class ConfigurationError extends Error {
@@ -99,6 +112,69 @@ function parseOrigins(value: string | undefined, environment: AppConfig['environ
   return origins
 }
 
+function parseOrigin(value: string, name: string, environment: AppConfig['environment']): string {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new ConfigurationError(`Invalid configuration: ${name} must be an HTTP origin`)
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.origin !== value ||
+    (environment === 'production' && url.protocol !== 'https:')
+  ) {
+    throw new ConfigurationError(
+      `Invalid configuration: ${name} must be an ${environment === 'production' ? 'HTTPS' : 'HTTP'} origin without a path`,
+    )
+  }
+  return value
+}
+
+function parseDeliverySigningKeys(
+  value: string | undefined,
+  environment: AppConfig['environment'],
+): DeliverySigningKey[] {
+  if (value === undefined) {
+    if (environment === 'production') {
+      throw new ConfigurationError(
+        'Invalid configuration: DELIVERY_SIGNING_KEYS is required in production',
+      )
+    }
+    return [
+      {
+        id: 'development',
+        secret: Buffer.from('development-only-delivery-key-01').toString('base64url'),
+      },
+    ]
+  }
+
+  const keys = value.split(',').map((entry) => {
+    const separator = entry.indexOf(':')
+    const id = entry.slice(0, separator)
+    const secret = entry.slice(separator + 1)
+    const decoded = Buffer.from(secret, 'base64url')
+    if (
+      separator < 1 ||
+      !/^[A-Za-z0-9_-]{1,32}$/.test(id) ||
+      !/^[A-Za-z0-9_-]{43,}$/.test(secret) ||
+      decoded.byteLength < 32 ||
+      decoded.toString('base64url') !== secret
+    ) {
+      throw new ConfigurationError(
+        'Invalid configuration: DELIVERY_SIGNING_KEYS must contain kid:base64url-secret entries with at least 32 secret bytes',
+      )
+    }
+    return { id, secret }
+  })
+  if (keys.length === 0 || new Set(keys.map((key) => key.id)).size !== keys.length) {
+    throw new ConfigurationError(
+      'Invalid configuration: DELIVERY_SIGNING_KEYS must contain unique key IDs',
+    )
+  }
+  return keys
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = environmentSchema.safeParse(environment)
 
@@ -125,18 +201,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     )
   }
 
-  const authBaseUrl = value.BETTER_AUTH_URL ?? `http://localhost:${value.PORT}`
-  const parsedAuthBaseUrl = new URL(authBaseUrl)
-  if (parsedAuthBaseUrl.origin !== authBaseUrl) {
-    throw new ConfigurationError(
-      'Invalid configuration: BETTER_AUTH_URL must be an HTTP origin without a path',
-    )
-  }
-  if (value.NODE_ENV === 'production' && parsedAuthBaseUrl.protocol !== 'https:') {
-    throw new ConfigurationError(
-      'Invalid configuration: BETTER_AUTH_URL must use HTTPS in production',
-    )
-  }
+  const authBaseUrl = parseOrigin(
+    value.BETTER_AUTH_URL ?? `http://localhost:${value.PORT}`,
+    'BETTER_AUTH_URL',
+    value.NODE_ENV,
+  )
+  const deliveryBaseUrl = parseOrigin(
+    value.DELIVERY_BASE_URL ?? authBaseUrl,
+    'DELIVERY_BASE_URL',
+    value.NODE_ENV,
+  )
 
   return Object.freeze({
     environment: value.NODE_ENV,
@@ -166,6 +240,14 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     uploadMaxBytes: value.UPLOAD_MAX_BYTES,
     projectStorageQuotaBytes: value.PROJECT_STORAGE_QUOTA_BYTES,
     uploadStaleAfterMs: value.UPLOAD_STALE_AFTER_MS,
+    deliveryBaseUrl,
+    deliverySigningKeys: Object.freeze(
+      parseDeliverySigningKeys(value.DELIVERY_SIGNING_KEYS, value.NODE_ENV).map((key) =>
+        Object.freeze(key),
+      ),
+    ),
+    deliveryUrlTtlSeconds: value.DELIVERY_URL_TTL_SECONDS,
+    publicDeliveryCacheSeconds: value.PUBLIC_DELIVERY_CACHE_SECONDS,
     authSecret,
     authBaseUrl,
     version: value.AEONIC_VERSION,

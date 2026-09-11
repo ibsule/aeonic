@@ -19,6 +19,10 @@ describe('configuration', () => {
     assert.equal(config.uploadMaxBytes, 100 * 1024 * 1024)
     assert.equal(config.projectStorageQuotaBytes, 10 * 1024 * 1024 * 1024)
     assert.equal(config.uploadStaleAfterMs, 60 * 60 * 1_000)
+    assert.equal(config.deliveryBaseUrl, 'http://localhost:3001')
+    assert.equal(config.deliverySigningKeys[0]?.id, 'development')
+    assert.equal(config.deliveryUrlTtlSeconds, 900)
+    assert.equal(config.publicDeliveryCacheSeconds, 365 * 24 * 60 * 60)
     assert.equal(config.authBaseUrl, 'http://localhost:3001')
     assert.equal(config.version, '0.3.0')
   })
@@ -28,6 +32,7 @@ describe('configuration', () => {
       NODE_ENV: 'production',
       BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
       BETTER_AUTH_URL: 'https://media.example.com',
+      DELIVERY_SIGNING_KEYS: `primary:${Buffer.alloc(32, 1).toString('base64url')}`,
     })
 
     assert.deepEqual(config.corsOrigins, [])
@@ -41,8 +46,33 @@ describe('configuration', () => {
           NODE_ENV: 'production',
           BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
           BETTER_AUTH_URL: 'http://media.example.com',
+          DELIVERY_SIGNING_KEYS: `primary:${Buffer.alloc(32, 1).toString('base64url')}`,
         }),
       ConfigurationError,
+    )
+  })
+
+  it('requires strong, rotation-ready delivery signing keys in production', () => {
+    const production = {
+      NODE_ENV: 'production',
+      BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
+      BETTER_AUTH_URL: 'https://media.example.com',
+    }
+    assert.throws(() => loadConfig(production), ConfigurationError)
+    assert.throws(
+      () => loadConfig({ ...production, DELIVERY_SIGNING_KEYS: 'primary:too-short' }),
+      ConfigurationError,
+    )
+
+    const config = loadConfig({
+      ...production,
+      DELIVERY_BASE_URL: 'https://cdn.example.com',
+      DELIVERY_SIGNING_KEYS: `current:${Buffer.alloc(32, 1).toString('base64url')},previous:${Buffer.alloc(32, 2).toString('base64url')}`,
+    })
+    assert.equal(config.deliveryBaseUrl, 'https://cdn.example.com')
+    assert.deepEqual(
+      config.deliverySigningKeys.map((key) => key.id),
+      ['current', 'previous'],
     )
   })
 

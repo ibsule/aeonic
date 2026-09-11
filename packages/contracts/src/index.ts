@@ -16,6 +16,14 @@ export {
   auditEventListSchema,
   auditEventSchema,
 } from './audit-events.js'
+export {
+  type CreateDeliveryUrlRequest,
+  createDeliveryUrlRequestSchema,
+  type DeliveryDisposition,
+  type DeliveryUrl,
+  deliveryDispositions,
+  deliveryUrlSchema,
+} from './delivery.js'
 export { type ServiceStatus, serviceStatusSchema } from './health.js'
 export { type ProblemDetails, problemDetailsSchema } from './problem-details.js'
 export {
