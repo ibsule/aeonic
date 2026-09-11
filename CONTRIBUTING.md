@@ -15,10 +15,11 @@ pnpm check
 
 Run `pnpm dev` for local development. Copy `.env.example` only when you need to override defaults.
 
-### S3-compatible storage contract
+### S3-compatible storage and delivery contract
 
-The normal test suite keeps live object-storage tests disabled. To verify an S3-compatible provider,
-create an empty test bucket or allow the suite to create a temporary one, then run:
+The normal test suite keeps live object-storage tests disabled. To verify the storage adapter and
+the end-to-end original-delivery path against an S3-compatible provider, create an empty test bucket
+or allow the suite to create a temporary one, then run:
 
 ```bash
 S3_TEST_ENDPOINT=http://127.0.0.1:9000 \

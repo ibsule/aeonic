@@ -3,8 +3,10 @@ import {
   assignProjectMemberRequestSchema,
   auditEventListSchema,
   createApiKeyRequestSchema,
+  createDeliveryUrlRequestSchema,
   createdApiKeySchema,
   createProjectRequestSchema,
+  deliveryUrlSchema,
   problemDetailsSchema,
   projectListSchema,
   projectMemberListSchema,
@@ -39,6 +41,7 @@ const schema = (name: string) => ({ $ref: `#/components/schemas/${name}` })
 const response = (name: string) => ({ $ref: `#/components/responses/${name}` })
 const parameter = (name: string) => ({ $ref: `#/components/parameters/${name}` })
 const cookieSecurity = [{ cookieAuth: [] }]
+const projectReadSecurity = [{ cookieAuth: [] }, { projectApiKey: [] }]
 
 const jsonBody = (schemaName: string) => ({
   required: true,
@@ -79,11 +82,55 @@ const etagHeader = {
   },
 }
 
+const deliveryHeaders = {
+  'Accept-Ranges': {
+    description: 'Indicates support for a single byte range.',
+    schema: { type: 'string', const: 'bytes' },
+  },
+  'Content-Disposition': {
+    description: 'Safe inline or attachment disposition with an encoded filename.',
+    schema: { type: 'string' },
+  },
+  'Content-Length': { schema: { type: 'integer', minimum: 0 } },
+  'Cache-Control': { schema: { type: 'string' } },
+  ETag: { description: 'Strong validator for the immutable version.', schema: { type: 'string' } },
+  'Last-Modified': { schema: { type: 'string' } },
+}
+
+const originalResponse = (description: string) => ({
+  description,
+  headers: deliveryHeaders,
+  content: { '*/*': { schema: { type: 'string', format: 'binary' } } },
+})
+
+const originalResponses = {
+  '200': originalResponse('Complete immutable original.'),
+  '206': {
+    ...originalResponse('Requested byte range.'),
+    headers: {
+      ...deliveryHeaders,
+      'Content-Range': { schema: { type: 'string', pattern: '^bytes [0-9]+-[0-9]+/[0-9]+$' } },
+    },
+  },
+  '304': { description: 'The client validator still matches.' },
+  '416': {
+    ...response('Problem'),
+    headers: {
+      'Content-Range': { schema: { type: 'string', pattern: '^bytes \\*/[0-9]+$' } },
+    },
+  },
+  '503': response('Problem'),
+}
+
 const projectCollectionPath = '/api/v1/organizations/{organizationId}/projects'
 const projectItemPath = '/api/v1/organizations/{organizationId}/projects/{projectId}'
 const memberCollectionPath = `${projectItemPath}/members`
 const apiKeyCollectionPath = `${projectItemPath}/api-keys`
 const uploadCollectionPath = `${projectItemPath}/uploads`
+const assetVersionPath = `${projectItemPath}/assets/{publicId}/versions/{version}`
+const deliveryUrlPath = `${assetVersionPath}/delivery-url`
+const authenticatedOriginalPath = `${assetVersionPath}/original`
+const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filename}'
 
 export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
   return {
@@ -107,6 +154,7 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       { name: 'API keys', description: 'Project-scoped machine credentials.' },
       { name: 'Audit', description: 'Administrator-only audit history.' },
       { name: 'Uploads', description: 'Bounded, tenant-isolated media ingestion.' },
+      { name: 'Delivery', description: 'Authorized original-asset streaming and sharing.' },
     ],
     paths: {
       '/health/live': {
@@ -443,6 +491,111 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           },
         },
       },
+      [deliveryUrlPath]: {
+        post: {
+          operationId: 'createOriginalDeliveryUrl',
+          tags: ['Delivery'],
+          summary: 'Create a temporary original-asset URL',
+          description:
+            'Creates a tamper-resistant capability URL for one ready asset version. Private assets remain inaccessible without its unexpired signature.',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+          ],
+          requestBody: jsonBody('CreateDeliveryUrlRequest'),
+          responses: {
+            '201': jsonResponse('Temporary delivery URL created.', 'DeliveryUrl'),
+            ...standardErrors,
+          },
+        },
+      },
+      [authenticatedOriginalPath]: {
+        get: {
+          operationId: 'getAuthenticatedOriginal',
+          tags: ['Delivery'],
+          summary: 'Download an original asset with project credentials',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('Disposition'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, ...standardErrors },
+        },
+        head: {
+          operationId: 'headAuthenticatedOriginal',
+          tags: ['Delivery'],
+          summary: 'Inspect original-asset response metadata with project credentials',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('Disposition'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, ...standardErrors },
+        },
+      },
+      [publicOriginalPath]: {
+        get: {
+          operationId: 'getOriginalByUrl',
+          tags: ['Delivery'],
+          summary: 'Download an original asset by canonical URL',
+          description:
+            'Public assets need no query signature. Private assets require the complete unmodified signed query returned by the delivery-URL endpoint.',
+          security: [],
+          parameters: [
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('Filename'),
+            parameter('Disposition'),
+            parameter('DeliveryExpires'),
+            parameter('DeliveryKeyId'),
+            parameter('DeliverySignature'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, '404': response('Problem') },
+        },
+        head: {
+          operationId: 'headOriginalByUrl',
+          tags: ['Delivery'],
+          summary: 'Inspect canonical original-asset response metadata',
+          security: [],
+          parameters: [
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('Filename'),
+            parameter('Disposition'),
+            parameter('DeliveryExpires'),
+            parameter('DeliveryKeyId'),
+            parameter('DeliverySignature'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, '404': response('Problem') },
+        },
+      },
       '/api/v1/organizations/{organizationId}/audit-events': {
         get: {
           operationId: 'listAuditEvents',
@@ -479,7 +632,7 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           type: 'apiKey',
           in: 'header',
           name: 'x-api-key',
-          description: 'Reserved for project media APIs introduced in a later phase.',
+          description: 'Project-scoped credential for upload and original-delivery APIs.',
         },
       },
       parameters: {
@@ -494,6 +647,69 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           in: 'path',
           required: true,
           schema: { type: 'string', format: 'uuid' },
+        },
+        PublicId: {
+          name: 'publicId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+        Version: {
+          name: 'version',
+          in: 'path',
+          required: true,
+          schema: { type: 'integer', minimum: 1 },
+        },
+        Filename: {
+          name: 'filename',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', minLength: 1, maxLength: 255 },
+        },
+        Disposition: {
+          name: 'disposition',
+          in: 'query',
+          schema: createDeliveryUrlRequestSchema.properties.disposition,
+        },
+        DeliveryExpires: {
+          name: 'expires',
+          in: 'query',
+          schema: { type: 'integer', minimum: 1 },
+          description: 'Opaque signed-URL expiry. Use the value returned by the API unchanged.',
+        },
+        DeliveryKeyId: {
+          name: 'kid',
+          in: 'query',
+          schema: { type: 'string' },
+          description:
+            'Opaque signing-key identifier. Use the value returned by the API unchanged.',
+        },
+        DeliverySignature: {
+          name: 'signature',
+          in: 'query',
+          schema: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' },
+          description: 'Opaque URL signature. Treat the complete signed URL as a bearer secret.',
+        },
+        Range: {
+          name: 'Range',
+          in: 'header',
+          schema: { type: 'string', pattern: '^bytes=' },
+          description: 'One byte range. Multipart ranges are not supported.',
+        },
+        IfNoneMatch: {
+          name: 'If-None-Match',
+          in: 'header',
+          schema: { type: 'string' },
+        },
+        IfModifiedSince: {
+          name: 'If-Modified-Since',
+          in: 'header',
+          schema: { type: 'string' },
+        },
+        IfRange: {
+          name: 'If-Range',
+          in: 'header',
+          schema: { type: 'string' },
         },
         UserId: {
           name: 'userId',
@@ -544,6 +760,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         AuditEventList: component(auditEventListSchema),
         UploadQuery: component(uploadQuerySchema),
         SimpleUploadResult: component(simpleUploadResultSchema),
+        CreateDeliveryUrlRequest: component(createDeliveryUrlRequestSchema),
+        DeliveryUrl: component(deliveryUrlSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

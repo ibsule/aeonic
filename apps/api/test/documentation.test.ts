@@ -35,6 +35,9 @@ describe('API documentation', () => {
       '/api/v1/organizations/{organizationId}/projects/{projectId}/members',
       '/api/v1/organizations/{organizationId}/projects/{projectId}/api-keys',
       '/api/v1/organizations/{organizationId}/projects/{projectId}/uploads',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/delivery-url',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/original',
+      '/m/{projectId}/{publicId}/v{version}/original/{filename}',
       '/api/v1/organizations/{organizationId}/audit-events',
     ]) {
       assert.ok(paths.includes(expected), `missing documented path: ${expected}`)
@@ -59,7 +62,7 @@ describe('API documentation', () => {
       }
     }
 
-    assert.ok(operationIds.size >= 19)
+    assert.ok(operationIds.size >= 24)
   })
 
   it('serves an interactive reference with a version-pinned browser dependency', async () => {

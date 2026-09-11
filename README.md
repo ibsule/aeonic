@@ -25,11 +25,13 @@ ships:
 - Tenant-scoped local and S3-compatible storage engines with immutable streaming writes.
 - Streaming simple uploads with size limits, project quota reservations, optional SHA-256 checks,
   MIME/extension/signature validation, idempotent replay, and interrupted-upload reconciliation.
+- Immutable original-asset delivery over local or S3-compatible storage, including authenticated
+  reads, expiring signed URLs, conditional requests, and single byte ranges.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Asset delivery, decoder-level media inspection, transformations, the dashboard, Docker Compose,
-and AI features are **not implemented yet**. Accepted uploads remain in `processing` with a durable
-`media.inspect` job until the worker arrives in the next phase task.
+Decoder-level media inspection, transformations, the dashboard, Docker Compose, and AI features are
+**not implemented yet**. Accepted uploads remain in `processing` with a durable `media.inspect` job
+until the worker arrives in the next phase task; only ready versions can be delivered.
 
 ## Requirements
 
@@ -71,6 +73,23 @@ Service clients can send a project-scoped `assets:write` key in `x-api-key`. Sup
 `Content-Digest: sha-256=:BASE64_DIGEST:` when end-to-end checksum verification is needed. Simple
 uploads require `Content-Length`, default to private visibility, are limited to 100 MiB, and share a
 configurable 10 GiB quota per project.
+
+Ready public assets have immutable canonical URLs and may be fetched directly. Private assets can
+be read with a cookie session or an `assets:read` project key, or shared temporarily by creating a
+signed URL:
+
+```bash
+curl --request POST \
+  --cookie cookies.txt \
+  --header 'Content-Type: application/json' \
+  --data '{"expiresInSeconds":900,"disposition":"attachment"}' \
+  'http://localhost:3001/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/assets/PUBLIC_ID/versions/1/delivery-url'
+```
+
+The response URL is a bearer capability: keep its full query string private and do not modify it.
+Signed URLs expire after 15 minutes by default. Documents are always served as attachments; images
+and videos default to inline. Delivery supports `GET`, `HEAD`, validators, and one RFC byte range.
+Use the interactive API reference for the authenticated and canonical URL shapes.
 
 Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
 provided by your shell or process supervisor; automatic `.env` file loading is not currently part
