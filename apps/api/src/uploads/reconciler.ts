@@ -33,6 +33,7 @@ export class UploadReconciler {
       .where(
         and(
           inArray(uploads.state, ['created', 'receiving', 'validating', 'failed', 'rejected']),
+          eq(uploads.protocol, 'simple'),
           lt(uploads.updatedAt, cutoff),
           or(isNull(storageObjects.id), inArray(storageObjects.state, ['staging', 'failed'])),
         ),

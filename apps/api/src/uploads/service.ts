@@ -8,7 +8,6 @@ import {
   assets,
   assetVersions,
   auditEvents,
-  jobs,
   projectApiKeys,
   projects as projectTable,
   storageObjects,
@@ -20,7 +19,8 @@ import type { ProjectService } from '../projects/service.js'
 import type { TenantScope } from '../repositories/types.js'
 import { createStorageObjectKey, StorageError } from '../storage/contracts.js'
 import type { StorageRuntime } from '../storage/factory.js'
-import { UploadContentError, type UploadDescriptor, validateStoredContent } from './validation.js'
+import { UploadFinalizer, type UploadReservation } from './finalizer.js'
+import type { UploadDescriptor } from './validation.js'
 
 interface UploadRequest {
   principal: Principal
@@ -34,21 +34,7 @@ interface UploadRequest {
   signal: AbortSignal
 }
 
-interface Reservation {
-  scope: TenantScope
-  uploadId: string
-  assetId: string
-  assetVersionId: string
-  storageObjectId: string
-  storageKey: ReturnType<typeof createStorageObjectKey>
-  publicId: string
-  createdBy: string
-  createdAt: Date
-  descriptor: UploadDescriptor
-  actorType: 'user' | 'api_key'
-  actorId: string
-  requestId: string
-}
+type Reservation = UploadReservation
 
 export interface UploadOutcome {
   replayed: boolean
@@ -96,12 +82,16 @@ function resultFromReservation(
 }
 
 export class UploadService {
+  private readonly finalizer: UploadFinalizer
+
   constructor(
     private readonly database: DatabaseConnection,
     private readonly projects: ProjectService,
     private readonly storage: StorageRuntime,
     private readonly limits: Pick<AppConfig, 'projectStorageQuotaBytes' | 'uploadMaxBytes'>,
-  ) {}
+  ) {
+    this.finalizer = new UploadFinalizer(database, storage)
+  }
 
   private creatorFor(principal: Principal, scope: TenantScope): string {
     if (principal.type === 'user') {
@@ -242,6 +232,7 @@ export class UploadService {
       actorId:
         request.principal.type === 'user' ? request.principal.userId : request.principal.keyId,
       requestId: request.requestId,
+      protocol: 'simple',
     }
 
     try {
@@ -362,169 +353,6 @@ export class UploadService {
     return reservation
   }
 
-  private markValidating(reservation: Reservation, sizeBytes: number, sha256: string): void {
-    const now = new Date()
-    this.database.db.transaction((transaction) => {
-      transaction
-        .update(uploads)
-        .set({
-          state: 'validating',
-          receivedBytes: sizeBytes,
-          actualChecksum: sha256,
-          updatedAt: now,
-        })
-        .where(eq(uploads.id, reservation.uploadId))
-        .run()
-      transaction
-        .update(assets)
-        .set({ state: 'validating', updatedAt: now })
-        .where(eq(assets.id, reservation.assetId))
-        .run()
-      transaction
-        .update(assetVersions)
-        .set({ state: 'validating' })
-        .where(eq(assetVersions.id, reservation.assetVersionId))
-        .run()
-    })
-  }
-
-  private complete(reservation: Reservation, sizeBytes: number, sha256: string): void {
-    const now = new Date()
-    this.database.db.transaction((transaction) => {
-      transaction
-        .update(storageObjects)
-        .set({
-          state: 'available',
-          sizeBytes,
-          sha256,
-          finalizedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(storageObjects.id, reservation.storageObjectId))
-        .run()
-      transaction
-        .update(assetVersions)
-        .set({
-          state: 'processing',
-          mimeType: reservation.descriptor.declaredMimeType,
-          sizeBytes,
-          sha256,
-        })
-        .where(eq(assetVersions.id, reservation.assetVersionId))
-        .run()
-      transaction
-        .update(assets)
-        .set({ state: 'processing', currentVersion: 1, updatedAt: now })
-        .where(eq(assets.id, reservation.assetId))
-        .run()
-      transaction
-        .update(uploads)
-        .set({
-          state: 'completed',
-          detectedMimeType: reservation.descriptor.declaredMimeType,
-          completedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(uploads.id, reservation.uploadId))
-        .run()
-      transaction
-        .insert(jobs)
-        .values({
-          id: uuidv7(),
-          organizationId: reservation.scope.organizationId,
-          projectId: reservation.scope.projectId,
-          type: 'media.inspect',
-          state: 'queued',
-          payload: {
-            assetId: reservation.assetId,
-            assetVersionId: reservation.assetVersionId,
-            storageObjectId: reservation.storageObjectId,
-          },
-          runAfter: now,
-          createdBy: reservation.createdBy,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      transaction
-        .insert(auditEvents)
-        .values({
-          id: uuidv7(),
-          organizationId: reservation.scope.organizationId,
-          projectId: reservation.scope.projectId,
-          actorType: reservation.actorType,
-          actorId: reservation.actorId,
-          action: 'asset.uploaded',
-          targetType: 'asset',
-          targetId: reservation.assetId,
-          requestId: reservation.requestId,
-          summary: {
-            uploadId: reservation.uploadId,
-            mimeType: reservation.descriptor.declaredMimeType,
-            sizeBytes,
-            sha256,
-          },
-          createdAt: now,
-        })
-        .run()
-    })
-  }
-
-  private async rejectContent(reservation: Reservation, error: UploadContentError): Promise<void> {
-    const now = new Date()
-    let objectState: 'deleted' | 'failed' = 'deleted'
-    try {
-      await this.storage.port.delete(reservation.scope, reservation.storageKey)
-    } catch (deleteError) {
-      if (!(deleteError instanceof StorageError && deleteError.code === 'not_found')) {
-        objectState = 'failed'
-      }
-    }
-    this.database.db.transaction((transaction) => {
-      transaction
-        .update(storageObjects)
-        .set({
-          state: objectState,
-          errorCode: objectState === 'failed' ? 'cleanup_failed' : error.code,
-          ...(objectState === 'deleted' ? { deletedAt: now } : {}),
-          updatedAt: now,
-        })
-        .where(eq(storageObjects.id, reservation.storageObjectId))
-        .run()
-      transaction
-        .update(uploads)
-        .set({ state: 'rejected', errorCode: error.code, updatedAt: now })
-        .where(eq(uploads.id, reservation.uploadId))
-        .run()
-      transaction
-        .update(assets)
-        .set({ state: 'rejected', updatedAt: now })
-        .where(eq(assets.id, reservation.assetId))
-        .run()
-      transaction
-        .update(assetVersions)
-        .set({ state: 'rejected' })
-        .where(eq(assetVersions.id, reservation.assetVersionId))
-        .run()
-      transaction
-        .insert(auditEvents)
-        .values({
-          id: uuidv7(),
-          organizationId: reservation.scope.organizationId,
-          projectId: reservation.scope.projectId,
-          actorType: reservation.actorType,
-          actorId: reservation.actorId,
-          action: 'upload.rejected',
-          targetType: 'upload',
-          targetId: reservation.uploadId,
-          requestId: reservation.requestId,
-          summary: { reason: error.code },
-          createdAt: now,
-        })
-        .run()
-    })
-  }
-
   private markStorageFailure(reservation: Reservation, error: StorageError): void {
     const now = new Date()
     const rejected = ['checksum_mismatch', 'size_mismatch', 'size_exceeded'].includes(error.code)
@@ -609,23 +437,7 @@ export class UploadService {
       throw error
     }
 
-    this.markValidating(reserved, stored.sizeBytes, stored.sha256)
-    try {
-      await validateStoredContent(
-        this.storage.port,
-        reserved.scope,
-        reserved.storageKey,
-        reserved.descriptor,
-      )
-    } catch (error) {
-      if (error instanceof UploadContentError) {
-        await this.rejectContent(reserved, error)
-        throw new ApiError(415, 'Unsupported media', error.code, error.message)
-      }
-      throw error
-    }
-
-    this.complete(reserved, stored.sizeBytes, stored.sha256)
+    await this.finalizer.finalize(reserved, stored)
     return {
       replayed: false,
       result: resultFromReservation(reserved, stored.sizeBytes, stored.sha256),

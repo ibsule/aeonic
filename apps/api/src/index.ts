@@ -4,9 +4,12 @@ import { createAuth } from './auth/auth.js'
 import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
 import { type DatabaseConnection, openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
+import { ProjectService } from './projects/service.js'
 import { createServiceState } from './state.js'
 import { createStorageRuntime, type StorageRuntime } from './storage/factory.js'
 import { UploadReconciler } from './uploads/reconciler.js'
+import { TusUploadService } from './uploads/tus-service.js'
+import { TusStagingStore } from './uploads/tus-staging.js'
 
 function listen(server: Server, config: AppConfig): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -44,11 +47,23 @@ async function start(): Promise<void> {
   const logger = createAppLogger(config)
   let database: DatabaseConnection | undefined
   let storage: StorageRuntime | undefined
+  let tusUploads: TusUploadService | undefined
   try {
     database = openDatabase(config)
     database.migrate()
     storage = createStorageRuntime(config)
     await storage.port.initialize()
+    tusUploads = new TusUploadService(
+      database,
+      new ProjectService(database),
+      storage,
+      new TusStagingStore(config.tusStoragePath),
+      config,
+    )
+    const tusReconciliation = await tusUploads.reconcile()
+    if (tusReconciliation.inspected > 0) {
+      logger.info(tusReconciliation, 'resumable uploads reconciled')
+    }
     const reconciliation = await new UploadReconciler(database, storage).reconcile(
       new Date(Date.now() - config.uploadStaleAfterMs),
     )
@@ -64,7 +79,7 @@ async function start(): Promise<void> {
   }
   const auth = createAuth(config, database)
   const state = createServiceState()
-  const app = buildApp({ config, state, logger, auth, database, storage })
+  const app = buildApp({ config, state, logger, auth, database, storage, tusUploads })
   const server = createServer(app)
   server.requestTimeout = config.requestTimeoutMs
   server.headersTimeout = Math.min(config.requestTimeoutMs + 1_000, 300_000)

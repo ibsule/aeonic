@@ -35,6 +35,8 @@ import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
 import type { StorageRuntime } from './storage/factory.js'
 import { UploadService } from './uploads/service.js'
+import { TusUploadService } from './uploads/tus-service.js'
+import { TusStagingStore } from './uploads/tus-staging.js'
 
 export interface BuildAppOptions {
   config?: AppConfig
@@ -43,6 +45,8 @@ export interface BuildAppOptions {
   auth?: AuthService
   database?: DatabaseConnection
   storage?: StorageRuntime
+  tusStaging?: TusStagingStore
+  tusUploads?: TusUploadService
 }
 
 interface HttpErrorLike {
@@ -100,6 +104,21 @@ export function buildApp(options: BuildAppOptions = {}): Express {
     cors({
       origin: config.corsOrigins.length === 0 ? false : [...config.corsOrigins],
       credentials: config.corsOrigins.length > 0,
+      preflightContinue: true,
+      exposedHeaders: [
+        'Location',
+        'Tus-Resumable',
+        'Tus-Version',
+        'Tus-Extension',
+        'Tus-Max-Size',
+        'Tus-Checksum-Algorithm',
+        'Upload-Offset',
+        'Upload-Length',
+        'Upload-Metadata',
+        'Upload-Expires',
+        'Upload-Asset-Id',
+        'Upload-Public-Id',
+      ],
     }),
   )
   if (options.auth) {
@@ -126,6 +145,15 @@ export function buildApp(options: BuildAppOptions = {}): Express {
           createUploadsRouter(
             options.auth,
             new UploadService(options.database, projects, options.storage, config),
+            options.tusUploads ??
+              new TusUploadService(
+                options.database,
+                projects,
+                options.storage,
+                options.tusStaging ?? new TusStagingStore(config.tusStoragePath),
+                config,
+              ),
+            config.tusUploadMaxBytes,
           ),
         )
       }
@@ -153,6 +181,10 @@ export function buildApp(options: BuildAppOptions = {}): Express {
       )
     }
   }
+
+  app.options('*splat', (_request: Request, response: Response) => {
+    response.status(204).end()
+  })
 
   app.use((request: Request, response: Response) =>
     sendProblem(request, response, {
