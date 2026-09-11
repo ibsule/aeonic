@@ -90,7 +90,7 @@ describe('project storage overview', () => {
       .set('content-type', 'image/png')
       .send(png)
     const resumable = await owner.agent
-      .post(`${owner.root}/uploads`)
+      .post(`${owner.root}/tus`)
       .set('tus-resumable', '1.0.0')
       .set('upload-length', String(png.byteLength * 2))
       .set('upload-metadata', metadata())

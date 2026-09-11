@@ -86,7 +86,7 @@ async function initializeOwner(app: ReturnType<typeof buildApp>) {
     email: 'owner@example.com',
     password: 'a-strong-development-password',
   })
-  const collection = `/api/v1/organizations/${setup.body.organizationId}/projects/${setup.body.projectId}/uploads`
+  const collection = `/api/v1/organizations/${setup.body.organizationId}/projects/${setup.body.projectId}/tus`
   return { agent, collection }
 }
 
@@ -136,7 +136,7 @@ describe('tus resumable uploads', () => {
     assert.equal(created.status, 201)
     assert.equal(created.headers['tus-resumable'], '1.0.0')
     assert.equal(created.headers['upload-offset'], '0')
-    assert.match(created.headers.location ?? '', /\/uploads\/[0-9a-f-]+$/)
+    assert.match(created.headers.location ?? '', /\/tus\/[0-9a-f-]+$/)
     assert.match(created.headers['upload-expires'] ?? '', /GMT$/)
     assert.match(created.headers['upload-asset-id'] ?? '', /^[0-9a-f-]+$/)
     const location = created.headers.location as string

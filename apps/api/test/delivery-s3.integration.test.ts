@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import {
   CreateBucketCommand,
@@ -22,6 +25,7 @@ const enabled = endpoint !== undefined && accessKeyId !== undefined && secretAcc
 const bucket = process.env.S3_TEST_BUCKET ?? `aeonic-delivery-${randomUUID()}`
 const region = process.env.S3_TEST_REGION ?? 'us-east-1'
 const prefix = `delivery-runs/${randomUUID()}`
+const tusDirectory = join(tmpdir(), `aeonic-s3-tus-${randomUUID()}`)
 const administration = enabled
   ? new S3Client({
       region,
@@ -43,6 +47,7 @@ before(async () => {
 after(async () => {
   database?.close()
   storage?.close()
+  await rm(tusDirectory, { recursive: true, force: true })
   if (administration === null) return
   const listed = await administration.send(
     new ListObjectsV2Command({ Bucket: bucket, Prefix: `${prefix}/` }),
@@ -60,7 +65,7 @@ after(async () => {
 })
 
 describe('S3-backed original delivery', { skip: !enabled }, () => {
-  it('preserves upload, full-read, and range-read behavior through the HTTP API', async () => {
+  it('preserves simple, resumable, delivery, and usage behavior through the HTTP API', async () => {
     assert.ok(endpoint && accessKeyId && secretAccessKey)
     const config = loadConfig({
       NODE_ENV: 'test',
@@ -69,6 +74,7 @@ describe('S3-backed original delivery', { skip: !enabled }, () => {
       BETTER_AUTH_URL: 'http://localhost:3001',
       DELIVERY_SIGNING_KEYS: `test:${Buffer.alloc(32, 7).toString('base64url')}`,
       STORAGE_BACKEND: 's3',
+      TUS_STORAGE_PATH: tusDirectory,
       S3_BUCKET: bucket,
       S3_REGION: region,
       S3_ENDPOINT: endpoint,
@@ -130,5 +136,36 @@ describe('S3-backed original delivery', { skip: !enabled }, () => {
     assert.equal(partial.status, 206)
     assert.deepEqual(partial.body, content.subarray(4, 13))
     assert.equal(partial.headers['content-range'], `bytes 4-12/${content.byteLength}`)
+
+    const tusMetadata = [
+      `filename ${Buffer.from('resumable.png').toString('base64')}`,
+      `filetype ${Buffer.from('image/png').toString('base64')}`,
+    ].join(',')
+    const tusCreated = await agent
+      .post(
+        `/api/v1/organizations/${setup.body.organizationId}/projects/${setup.body.projectId}/tus`,
+      )
+      .set('tus-resumable', '1.0.0')
+      .set('upload-length', String(content.byteLength))
+      .set('upload-metadata', tusMetadata)
+      .send()
+    const tusCompleted = await agent
+      .patch(tusCreated.headers.location as string)
+      .set('tus-resumable', '1.0.0')
+      .set('upload-offset', '0')
+      .set('content-type', 'application/offset+octet-stream')
+      .send(content)
+    const overview = await agent.get(
+      `/api/v1/organizations/${setup.body.organizationId}/projects/${setup.body.projectId}/storage`,
+    )
+
+    assert.equal(tusCreated.status, 201)
+    assert.equal(tusCompleted.status, 204)
+    assert.equal(tusCompleted.headers['upload-offset'], String(content.byteLength))
+    assert.equal(overview.status, 200)
+    assert.equal(overview.body.backend, 's3')
+    assert.equal(overview.body.usage.usedBytes, content.byteLength * 2)
+    assert.equal(overview.body.usage.reservedBytes, 0)
+    assert.equal(overview.body.health.status, 'available')
   })
 })

@@ -12,11 +12,13 @@ import {
   projectMemberListSchema,
   projectMemberSchema,
   projectSchema,
+  projectStorageOverviewSchema,
   serviceStatusSchema,
   setupRequestSchema,
   setupResultSchema,
   setupStatusSchema,
   simpleUploadResultSchema,
+  storageFailureSummarySchema,
   updateProjectRequestSchema,
   uploadQuerySchema,
 } from '@aeonic/contracts'
@@ -131,6 +133,19 @@ const assetVersionPath = `${projectItemPath}/assets/{publicId}/versions/{version
 const deliveryUrlPath = `${assetVersionPath}/delivery-url`
 const authenticatedOriginalPath = `${assetVersionPath}/original`
 const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filename}'
+const tusCollectionPath = `${projectItemPath}/tus`
+const tusItemPath = `${tusCollectionPath}/{uploadId}`
+const storageOverviewPath = `${projectItemPath}/storage`
+
+const tusResponseHeaders = {
+  'Tus-Resumable': { schema: { type: 'string', const: '1.0.0' } },
+  'Tus-Version': { schema: { type: 'string', const: '1.0.0' } },
+  'Upload-Offset': { schema: { type: 'integer', minimum: 0 } },
+  'Upload-Length': { schema: { type: 'integer', minimum: 1 } },
+  'Upload-Expires': { schema: { type: 'string' } },
+  'Upload-Asset-Id': { schema: { type: 'string', format: 'uuid' } },
+  'Upload-Public-Id': { schema: { type: 'string', format: 'uuid' } },
+}
 
 export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
   return {
@@ -154,6 +169,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       { name: 'API keys', description: 'Project-scoped machine credentials.' },
       { name: 'Audit', description: 'Administrator-only audit history.' },
       { name: 'Uploads', description: 'Bounded, tenant-isolated media ingestion.' },
+      { name: 'Resumable uploads', description: 'Authenticated tus 1.0 media ingestion.' },
+      { name: 'Storage', description: 'Project usage, quota, and backend diagnostics.' },
       { name: 'Delivery', description: 'Authorized original-asset streaming and sharing.' },
     ],
     paths: {
@@ -491,6 +508,149 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           },
         },
       },
+      [tusCollectionPath]: {
+        options: {
+          operationId: 'discoverTusCapabilities',
+          tags: ['Resumable uploads'],
+          summary: 'Discover supported tus protocol capabilities',
+          security: [],
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          responses: {
+            '204': {
+              description: 'Tus 1.0 capability advertisement.',
+              headers: {
+                ...tusResponseHeaders,
+                'Tus-Extension': {
+                  schema: {
+                    type: 'string',
+                    const: 'creation,expiration,checksum,termination',
+                  },
+                },
+                'Tus-Max-Size': {
+                  schema: { type: 'integer', const: config.tusUploadMaxBytes },
+                },
+                'Tus-Checksum-Algorithm': {
+                  schema: { type: 'string', const: 'sha1,sha256' },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: 'createTusUpload',
+          tags: ['Resumable uploads'],
+          summary: 'Create a resumable media upload',
+          description:
+            'Implements tus 1.0 creation with fixed length. Upload-Metadata requires Base64-encoded filename and filetype values. Creation-with-upload and deferred length are not supported.',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('TusResumable'),
+            parameter('UploadLength'),
+            parameter('UploadMetadata'),
+          ],
+          responses: {
+            '201': {
+              description: 'Resumable upload created.',
+              headers: {
+                ...tusResponseHeaders,
+                Location: { schema: { type: 'string', format: 'uri-reference' } },
+              },
+            },
+            ...standardErrors,
+            '412': response('Problem'),
+            '413': response('Problem'),
+            '415': response('Problem'),
+          },
+        },
+      },
+      [tusItemPath]: {
+        head: {
+          operationId: 'getTusUploadOffset',
+          tags: ['Resumable uploads'],
+          summary: 'Get the durable resumable-upload offset',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('UploadId'),
+            parameter('TusResumable'),
+          ],
+          responses: {
+            '200': {
+              description: 'Current upload offset and metadata.',
+              headers: tusResponseHeaders,
+            },
+            ...standardErrors,
+            '410': response('Problem'),
+            '412': response('Problem'),
+          },
+        },
+        patch: {
+          operationId: 'appendTusUpload',
+          tags: ['Resumable uploads'],
+          summary: 'Append a chunk at the current upload offset',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('UploadId'),
+            parameter('TusResumable'),
+            parameter('UploadOffset'),
+            parameter('UploadChecksum'),
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/offset+octet-stream': {
+                schema: { type: 'string', format: 'binary' },
+              },
+            },
+          },
+          responses: {
+            '204': { description: 'Chunk stored successfully.', headers: tusResponseHeaders },
+            ...standardErrors,
+            '410': response('Problem'),
+            '412': response('Problem'),
+            '413': response('Problem'),
+            '415': response('Problem'),
+            '460': response('Problem'),
+          },
+        },
+        delete: {
+          operationId: 'terminateTusUpload',
+          tags: ['Resumable uploads'],
+          summary: 'Terminate a resumable upload resource',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('UploadId'),
+            parameter('TusResumable'),
+          ],
+          responses: {
+            '204': { description: 'Upload resource terminated.', headers: tusResponseHeaders },
+            ...standardErrors,
+            '410': response('Problem'),
+            '412': response('Problem'),
+          },
+        },
+      },
+      [storageOverviewPath]: {
+        get: {
+          operationId: 'getProjectStorageOverview',
+          tags: ['Storage'],
+          summary: 'Get project usage, quota, backend health, and failure classifications',
+          security: projectReadSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          responses: {
+            '200': jsonResponse('Current project storage overview.', 'ProjectStorageOverview'),
+            ...standardErrors,
+            '503': response('Problem'),
+          },
+        },
+      },
       [deliveryUrlPath]: {
         post: {
           operationId: 'createOriginalDeliveryUrl',
@@ -666,6 +826,41 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           required: true,
           schema: { type: 'string', minLength: 1, maxLength: 255 },
         },
+        UploadId: {
+          name: 'uploadId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+        TusResumable: {
+          name: 'Tus-Resumable',
+          in: 'header',
+          required: true,
+          schema: { type: 'string', const: '1.0.0' },
+        },
+        UploadLength: {
+          name: 'Upload-Length',
+          in: 'header',
+          required: true,
+          schema: { type: 'integer', minimum: 1, maximum: config.tusUploadMaxBytes },
+        },
+        UploadOffset: {
+          name: 'Upload-Offset',
+          in: 'header',
+          required: true,
+          schema: { type: 'integer', minimum: 0 },
+        },
+        UploadMetadata: {
+          name: 'Upload-Metadata',
+          in: 'header',
+          required: true,
+          schema: { type: 'string', maxLength: 4096 },
+        },
+        UploadChecksum: {
+          name: 'Upload-Checksum',
+          in: 'header',
+          schema: { type: 'string', pattern: '^(sha1|sha256) [A-Za-z0-9+/]+={0,2}$' },
+        },
         Disposition: {
           name: 'disposition',
           in: 'query',
@@ -762,6 +957,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         SimpleUploadResult: component(simpleUploadResultSchema),
         CreateDeliveryUrlRequest: component(createDeliveryUrlRequestSchema),
         DeliveryUrl: component(deliveryUrlSchema),
+        StorageFailureSummary: component(storageFailureSummarySchema),
+        ProjectStorageOverview: component(projectStorageOverviewSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

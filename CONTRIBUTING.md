@@ -17,9 +17,10 @@ Run `pnpm dev` for local development. Copy `.env.example` only when you need to 
 
 ### S3-compatible storage and delivery contract
 
-The normal test suite keeps live object-storage tests disabled. To verify the storage adapter and
-the end-to-end original-delivery path against an S3-compatible provider, create an empty test bucket
-or allow the suite to create a temporary one, then run:
+The normal test suite keeps live object-storage tests disabled. To verify the storage adapter,
+resumable finalization, usage diagnostics, and end-to-end original-delivery path against an
+S3-compatible provider, create an empty test bucket or allow the suite to create a temporary one,
+then run:
 
 ```bash
 S3_TEST_ENDPOINT=http://127.0.0.1:9000 \
@@ -32,6 +33,9 @@ pnpm --filter @aeonic/api test:s3
 `S3_TEST_BUCKET` and `S3_TEST_REGION` are optional. Never point the suite at a bucket containing
 real data. Insecure HTTP endpoints require an explicit local test URL; production integrations
 should use TLS.
+
+`TUS_STORAGE_PATH` must be a persistent, Aeonic-owned directory with enough temporary capacity for
+active resumable uploads. It must not be shared with the immutable object-storage directory.
 
 ## Quality requirements
 

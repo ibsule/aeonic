@@ -7,7 +7,7 @@ developers and small teams.
 ## Current status
 
 *Version 0.4 (in development)* provides the trustworthy API foundation, identity/control plane,
-and the first Phase 3 media-ingestion path. It currently
+and Phase 3 storage, ingestion, and original delivery. It currently
 ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
@@ -25,13 +25,16 @@ ships:
 - Tenant-scoped local and S3-compatible storage engines with immutable streaming writes.
 - Streaming simple uploads with size limits, project quota reservations, optional SHA-256 checks,
   MIME/extension/signature validation, idempotent replay, and interrupted-upload reconciliation.
+- Authenticated tus 1.0 resumable uploads with creation, expiry, SHA-1/SHA-256 chunk checksums,
+  termination, durable offsets, and restart reconciliation.
 - Immutable original-asset delivery over local or S3-compatible storage, including authenticated
   reads, expiring signed URLs, conditional requests, and single byte ranges.
+- Project-scoped storage usage, quota, health, and sanitized failure diagnostics.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
 Decoder-level media inspection, transformations, the dashboard, Docker Compose, and AI features are
 **not implemented yet**. Accepted uploads remain in `processing` with a durable `media.inspect` job
-until the worker arrives in the next phase task; only ready versions can be delivered.
+until the Phase 4 worker is implemented; only ready versions can be delivered.
 
 ## Requirements
 
@@ -73,6 +76,25 @@ Service clients can send a project-scoped `assets:write` key in `x-api-key`. Sup
 `Content-Digest: sha-256=:BASE64_DIGEST:` when end-to-end checksum verification is needed. Simple
 uploads require `Content-Length`, default to private visibility, are limited to 100 MiB, and share a
 configurable 10 GiB quota per project.
+
+For unreliable networks and large files, use a tus 1.0 client with the project creation endpoint:
+
+```text
+/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/tus
+```
+
+Aeonic advertises `creation`, `expiration`, `checksum`, and `termination`. Clients must provide a
+known `Upload-Length` and Base64-encoded `filename` and `filetype` metadata. The default resumable
+limit is 5 GiB and unfinished uploads expire after 24 hours of inactivity. The staging directory
+must be placed on persistent storage; completed bytes are moved into the configured local or
+S3-compatible backend only after integrity and media-type validation.
+
+Project usage, active reservations, remaining quota, backend health, and sanitized failure codes
+are available from:
+
+```text
+/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/storage
+```
 
 Ready public assets have immutable canonical URLs and may be fetched directly. Private assets can
 be read with a cookie session or an `assets:read` project key, or shared temporarily by creating a

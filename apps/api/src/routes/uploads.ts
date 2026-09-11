@@ -126,22 +126,19 @@ export function createUploadsRouter(
   tusMaxBytes: number,
 ): Router {
   const router = Router()
-  const collection = '/organizations/:organizationId/projects/:projectId/uploads'
-  const item = `${collection}/:uploadId`
+  const simpleCollection = '/organizations/:organizationId/projects/:projectId/uploads'
+  const tusCollection = '/organizations/:organizationId/projects/:projectId/tus'
+  const item = `${tusCollection}/:uploadId`
   const requireCreate = requireProjectActor(auth, { resource: 'asset', action: 'create' })
 
-  router.options([collection, item], (_request: Request, response: Response) => {
+  router.options([tusCollection, item], (_request: Request, response: Response) => {
     setTusDiscoveryHeaders(response, tusMaxBytes)
     response.status(204).end()
   })
 
   router.post(
-    collection,
-    (request, response, next) => {
-      if (request.get('tus-resumable') === undefined) {
-        next('route')
-        return
-      }
+    tusCollection,
+    (_request, response, next) => {
       setTusHeader(response)
       next()
     },
@@ -170,8 +167,11 @@ export function createUploadsRouter(
         length: parseTusInteger(request.get('upload-length'), 'Upload-Length'),
         requestId: String(request.id),
       })
+      const location = `${request.baseUrl}${tusCollection
+        .replace(':organizationId', scope(request).organizationId)
+        .replace(':projectId', scope(request).projectId)}/${created.uploadId}`
       response.set({
-        location: `${request.baseUrl}${collection.replace(':organizationId', scope(request).organizationId).replace(':projectId', scope(request).projectId)}/${created.uploadId}`,
+        location,
         'upload-expires': created.expiresAt.toUTCString(),
         'upload-offset': '0',
         'upload-asset-id': created.assetId,
@@ -182,7 +182,7 @@ export function createUploadsRouter(
   )
 
   router.post(
-    collection,
+    simpleCollection,
     requireProjectActor(auth, { resource: 'asset', action: 'create' }),
     async (request: Request, response: Response) => {
       const principal = request.principal
