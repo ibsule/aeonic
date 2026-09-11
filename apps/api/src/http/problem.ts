@@ -1,4 +1,4 @@
-import { problemDetailsSchema, type ProblemDetails } from '@aeonic/contracts'
+import { type ProblemDetails, problemDetailsSchema } from '@aeonic/contracts'
 import type { Request, Response } from 'express'
 import { sendJson } from './response.js'
 
@@ -26,6 +26,9 @@ export function sendProblem(
     ...(options.detail === undefined ? {} : { detail: options.detail }),
   }
 
+  response.removeHeader('content-length')
+  response.removeHeader('content-disposition')
+  response.set('cache-control', 'no-store')
   response.type('application/problem+json')
   return sendJson(response, options.status, problemDetailsSchema, problem)
 }
