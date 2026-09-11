@@ -5,6 +5,7 @@ import { type AppConfig, ConfigurationError, loadConfig } from './config.js'
 import { type DatabaseConnection, openDatabase } from './db/database.js'
 import { createAppLogger } from './logging.js'
 import { createServiceState } from './state.js'
+import { createStorageRuntime, type StorageRuntime } from './storage/factory.js'
 
 function listen(server: Server, config: AppConfig): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -41,18 +42,22 @@ async function start(): Promise<void> {
 
   const logger = createAppLogger(config)
   let database: DatabaseConnection | undefined
+  let storage: StorageRuntime | undefined
   try {
     database = openDatabase(config)
     database.migrate()
+    storage = createStorageRuntime(config)
+    await storage.port.initialize()
   } catch (error) {
-    logger.fatal({ err: error }, 'database startup failed')
+    logger.fatal({ err: error }, 'dependency startup failed')
+    storage?.close()
     database?.close()
     process.exitCode = 1
     return
   }
   const auth = createAuth(config, database)
   const state = createServiceState()
-  const app = buildApp({ config, state, logger, auth, database })
+  const app = buildApp({ config, state, logger, auth, database, storage })
   const server = createServer(app)
   server.requestTimeout = config.requestTimeoutMs
   server.headersTimeout = Math.min(config.requestTimeoutMs + 1_000, 300_000)
@@ -75,6 +80,7 @@ async function start(): Promise<void> {
 
     try {
       await close(server)
+      storage.close()
       database.close()
       clearTimeout(forceShutdown)
       logger.info('shutdown complete')
@@ -99,6 +105,7 @@ async function start(): Promise<void> {
     logger.fatal({ err: error }, 'API startup failed')
     process.exitCode = 1
     server.closeAllConnections()
+    storage.close()
     database.close()
   }
 }

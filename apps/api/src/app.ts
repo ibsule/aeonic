@@ -1,3 +1,4 @@
+import { toNodeHandler } from 'better-auth/node'
 import cors from 'cors'
 import express, {
   type ErrorRequestHandler,
@@ -8,28 +9,28 @@ import express, {
 } from 'express'
 import helmet from 'helmet'
 import pino, { type Logger } from 'pino'
-import { toNodeHandler } from 'better-auth/node'
-import type { AuthService } from './auth/auth.js'
 import { ApiKeyService } from './api-keys/service.js'
 import { SqliteAuditRepository } from './audit/repository.js'
 import { AuditService } from './audit/service.js'
+import type { AuthService } from './auth/auth.js'
 import type { AppConfig } from './config.js'
+import { loadConfig } from './config.js'
 import type { DatabaseConnection } from './db/database.js'
 import { ApiError } from './http/api-error.js'
-import { loadConfig } from './config.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
-import { createHealthRouter } from './routes/health.js'
-import { createDocumentationRouter } from './routes/documentation.js'
+import { ProjectMemberService } from './projects/members.js'
+import { ProjectService } from './projects/service.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
 import { createAuditEventsRouter } from './routes/audit-events.js'
-import { createProjectsRouter } from './routes/projects.js'
+import { createDocumentationRouter } from './routes/documentation.js'
+import { createHealthRouter } from './routes/health.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
+import { createProjectsRouter } from './routes/projects.js'
 import { createSetupRouter } from './routes/setup.js'
-import { ProjectService } from './projects/service.js'
-import { ProjectMemberService } from './projects/members.js'
 import { SetupService } from './setup/service.js'
 import { createServiceState, type ServiceState } from './state.js'
+import type { StorageRuntime } from './storage/factory.js'
 
 export interface BuildAppOptions {
   config?: AppConfig
@@ -37,6 +38,7 @@ export interface BuildAppOptions {
   logger?: Logger | false
   auth?: AuthService
   database?: DatabaseConnection
+  storage?: StorageRuntime
 }
 
 interface HttpErrorLike {

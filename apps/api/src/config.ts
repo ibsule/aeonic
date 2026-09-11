@@ -13,6 +13,24 @@ const environmentSchema = z.object({
   DATABASE_PATH: z.string().trim().min(1).default('data/aeonic.db'),
   DATABASE_BUSY_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
   DATABASE_WAL_AUTOCHECKPOINT_PAGES: z.coerce.number().int().min(1).max(100_000).default(1_000),
+  STORAGE_BACKEND: z.enum(['local', 's3']).default('local'),
+  LOCAL_STORAGE_PATH: z.string().trim().min(1).default('data/objects'),
+  S3_BUCKET: z.string().trim().min(1).optional(),
+  S3_REGION: z.string().trim().min(1).default('us-east-1'),
+  S3_ENDPOINT: z.url().optional(),
+  S3_ALLOW_INSECURE_ENDPOINT: z.enum(['true', 'false']).default('false'),
+  S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false'),
+  S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_PREFIX: z.string().optional(),
+  UPLOAD_MAX_BYTES: z.coerce.number().int().min(1_048_576).max(5_368_709_120).default(104_857_600),
+  PROJECT_STORAGE_QUOTA_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_048_576)
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(10_737_418_240),
+  UPLOAD_STALE_AFTER_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(3_600_000),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.url().optional(),
   AEONIC_VERSION: z.string().trim().min(1).default('0.3.0'),
@@ -31,6 +49,19 @@ export interface AppConfig {
   readonly databasePath: string
   readonly databaseBusyTimeoutMs: number
   readonly databaseWalAutocheckpointPages: number
+  readonly storageBackend: 'local' | 's3'
+  readonly localStoragePath: string
+  readonly s3Bucket?: string
+  readonly s3Region: string
+  readonly s3Endpoint?: string
+  readonly s3AllowInsecureEndpoint: boolean
+  readonly s3ForcePathStyle: boolean
+  readonly s3AccessKeyId?: string
+  readonly s3SecretAccessKey?: string
+  readonly s3Prefix?: string
+  readonly uploadMaxBytes: number
+  readonly projectStorageQuotaBytes: number
+  readonly uploadStaleAfterMs: number
   readonly authSecret: string
   readonly authBaseUrl: string
   readonly version: string
@@ -79,6 +110,14 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
 
   const value = parsed.data
+  if (value.STORAGE_BACKEND === 's3' && value.S3_BUCKET === undefined) {
+    throw new ConfigurationError('Invalid configuration: S3_BUCKET is required for S3 storage')
+  }
+  if ((value.S3_ACCESS_KEY_ID === undefined) !== (value.S3_SECRET_ACCESS_KEY === undefined)) {
+    throw new ConfigurationError(
+      'Invalid configuration: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together',
+    )
+  }
   const authSecret = value.BETTER_AUTH_SECRET ?? 'development-only-change-before-production'
   if (value.NODE_ENV === 'production' && value.BETTER_AUTH_SECRET === undefined) {
     throw new ConfigurationError(
@@ -112,6 +151,21 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     databasePath: value.DATABASE_PATH,
     databaseBusyTimeoutMs: value.DATABASE_BUSY_TIMEOUT_MS,
     databaseWalAutocheckpointPages: value.DATABASE_WAL_AUTOCHECKPOINT_PAGES,
+    storageBackend: value.STORAGE_BACKEND,
+    localStoragePath: value.LOCAL_STORAGE_PATH,
+    ...(value.S3_BUCKET === undefined ? {} : { s3Bucket: value.S3_BUCKET }),
+    s3Region: value.S3_REGION,
+    ...(value.S3_ENDPOINT === undefined ? {} : { s3Endpoint: value.S3_ENDPOINT }),
+    s3AllowInsecureEndpoint: value.S3_ALLOW_INSECURE_ENDPOINT === 'true',
+    s3ForcePathStyle: value.S3_FORCE_PATH_STYLE === 'true',
+    ...(value.S3_ACCESS_KEY_ID === undefined ? {} : { s3AccessKeyId: value.S3_ACCESS_KEY_ID }),
+    ...(value.S3_SECRET_ACCESS_KEY === undefined
+      ? {}
+      : { s3SecretAccessKey: value.S3_SECRET_ACCESS_KEY }),
+    ...(value.S3_PREFIX === undefined ? {} : { s3Prefix: value.S3_PREFIX }),
+    uploadMaxBytes: value.UPLOAD_MAX_BYTES,
+    projectStorageQuotaBytes: value.PROJECT_STORAGE_QUOTA_BYTES,
+    uploadStaleAfterMs: value.UPLOAD_STALE_AFTER_MS,
     authSecret,
     authBaseUrl,
     version: value.AEONIC_VERSION,

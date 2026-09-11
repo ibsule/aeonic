@@ -14,6 +14,11 @@ describe('configuration', () => {
     assert.equal(config.databasePath, 'data/aeonic.db')
     assert.equal(config.databaseBusyTimeoutMs, 5_000)
     assert.equal(config.databaseWalAutocheckpointPages, 1_000)
+    assert.equal(config.storageBackend, 'local')
+    assert.equal(config.localStoragePath, 'data/objects')
+    assert.equal(config.uploadMaxBytes, 100 * 1024 * 1024)
+    assert.equal(config.projectStorageQuotaBytes, 10 * 1024 * 1024 * 1024)
+    assert.equal(config.uploadStaleAfterMs, 60 * 60 * 1_000)
     assert.equal(config.authBaseUrl, 'http://localhost:3001')
     assert.equal(config.version, '0.3.0')
   })
@@ -57,5 +62,31 @@ describe('configuration', () => {
 
     assert.deepEqual(config.corsOrigins, ['https://app.example.com', 'http://localhost:3000'])
     assert.equal(config.trustProxy, true)
+  })
+
+  it('validates S3 storage configuration and credential pairs', () => {
+    assert.throws(() => loadConfig({ STORAGE_BACKEND: 's3' }), ConfigurationError)
+    assert.throws(
+      () =>
+        loadConfig({
+          STORAGE_BACKEND: 's3',
+          S3_BUCKET: 'media',
+          S3_ACCESS_KEY_ID: 'key',
+        }),
+      ConfigurationError,
+    )
+
+    const config = loadConfig({
+      STORAGE_BACKEND: 's3',
+      S3_BUCKET: 'media',
+      S3_ENDPOINT: 'http://localhost:9000',
+      S3_ALLOW_INSECURE_ENDPOINT: 'true',
+      S3_FORCE_PATH_STYLE: 'true',
+      S3_ACCESS_KEY_ID: 'key',
+      S3_SECRET_ACCESS_KEY: 'secret',
+    })
+    assert.equal(config.storageBackend, 's3')
+    assert.equal(config.s3Bucket, 'media')
+    assert.equal(config.s3ForcePathStyle, true)
   })
 })
