@@ -33,7 +33,7 @@ function nodeErrorCode(error: unknown): string | undefined {
   return error instanceof Error && 'code' in error ? String(error.code) : undefined
 }
 
-function asStorageError(error: unknown, action: string): StorageError {
+export function asLocalStorageError(error: unknown, action: string): StorageError {
   if (error instanceof StorageError) return error
   if (error instanceof Error && error.name === 'AbortError') {
     return new StorageError('aborted', `Storage ${action} was aborted.`, false, { cause: error })
@@ -119,7 +119,7 @@ export class LocalStorage implements StoragePort {
       this.#root = root
     } catch (error) {
       this.#initialization = null
-      throw asStorageError(error, 'initialization')
+      throw asLocalStorageError(error, 'initialization')
     }
   }
 
@@ -204,7 +204,7 @@ export class LocalStorage implements StoragePort {
     } catch (error) {
       if (stagingHandle !== null) await stagingHandle.close().catch(() => undefined)
       await unlink(stagingPath).catch(() => undefined)
-      throw asStorageError(error, 'write')
+      throw asLocalStorageError(error, 'write')
     }
   }
 
@@ -239,7 +239,7 @@ export class LocalStorage implements StoragePort {
       return stream
     } catch (error) {
       if (handle !== null) await handle.close().catch(() => undefined)
-      throw asStorageError(error, 'read')
+      throw asLocalStorageError(error, 'read')
     }
   }
 
@@ -252,7 +252,7 @@ export class LocalStorage implements StoragePort {
       assertRegularFile(stats)
       return { key, sizeBytes: stats.size, modifiedAt: stats.mtime }
     } catch (error) {
-      throw asStorageError(error, 'metadata read')
+      throw asLocalStorageError(error, 'metadata read')
     } finally {
       if (handle !== null) await handle.close().catch(() => undefined)
     }
@@ -267,7 +267,7 @@ export class LocalStorage implements StoragePort {
       await this.#syncDirectory(dirname(targetPath))
     } catch (error) {
       if (nodeErrorCode(error) === 'ENOENT') return
-      throw asStorageError(error, 'delete')
+      throw asLocalStorageError(error, 'delete')
     }
   }
 
@@ -354,7 +354,7 @@ export class LocalStorage implements StoragePort {
         throw new StorageError('invalid_key', 'Storage path contains a symbolic link.', false)
       }
     } catch (error) {
-      throw asStorageError(error, 'path validation')
+      throw asLocalStorageError(error, 'path validation')
     }
   }
 

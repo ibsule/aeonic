@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
@@ -11,7 +11,7 @@ import {
   StorageError,
   type StorageObjectKey,
 } from '../src/storage/contracts.js'
-import { LocalStorage } from '../src/storage/local-storage.js'
+import { asLocalStorageError, LocalStorage } from '../src/storage/local-storage.js'
 import { storageContractSuite } from './storage-contract-suite.js'
 
 const temporaryDirectories: string[] = []
@@ -170,14 +170,37 @@ describe('local storage', () => {
     assert.ok((health.capacity?.availableBytes ?? 0n) >= 0n)
   })
 
-  it('rejects handcrafted traversal keys before accessing the filesystem', async () => {
+  it('classifies disk exhaustion as a retryable capacity failure', () => {
+    for (const code of ['ENOSPC', 'EDQUOT']) {
+      const cause = Object.assign(new Error(`simulated ${code}`), { code })
+      const error = asLocalStorageError(cause, 'write')
+
+      assert.equal(error.code, 'quota_exceeded')
+      assert.equal(error.retryable, true)
+      assert.equal(error.cause, cause)
+    }
+  })
+
+  it('rejects a malicious-key corpus before accessing the filesystem', async () => {
     const { scope, storage } = await createStorage()
-    await assert.rejects(
-      storage.open(
-        scope,
-        `original/${scope.organizationId}/${scope.projectId}/aa/bb/../../outside` as StorageObjectKey,
-      ),
-      expectStorageCode('invalid_key'),
-    )
+    const objectId = uuidv7()
+    const maliciousKeys = [
+      `original/${scope.organizationId}/${scope.projectId}/aa/bb/../../outside`,
+      `original/${scope.organizationId}/${scope.projectId}/aa/bb/%2e%2e%2foutside`,
+      `original/${scope.organizationId}/${scope.projectId}/aa/bb/..\\outside`,
+      `/original/${scope.organizationId}/${scope.projectId}/aa/bb/${objectId}`,
+      `original/${scope.organizationId}/${scope.projectId}/aa/bb/${objectId}/extra`,
+      `original/${scope.organizationId}/${uuidv7()}/aa/bb/${objectId}`,
+      `original/${scope.organizationId}/${scope.projectId}/ff/ff/${objectId}`,
+      `unknown/${scope.organizationId}/${scope.projectId}/aa/bb/${objectId}`,
+      `original/${scope.organizationId}/${scope.projectId}/aa/bb/${objectId}\u2215outside`,
+    ]
+
+    for (const key of maliciousKeys) {
+      await assert.rejects(
+        storage.open(scope, key as StorageObjectKey),
+        expectStorageCode('invalid_key'),
+      )
+    }
   })
 })

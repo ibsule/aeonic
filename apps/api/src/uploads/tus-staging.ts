@@ -15,7 +15,7 @@ function nodeErrorCode(error: unknown): string | undefined {
   return error instanceof Error && 'code' in error ? String(error.code) : undefined
 }
 
-function asStagingError(error: unknown, action: string): StorageError {
+export function asTusStagingError(error: unknown, action: string): StorageError {
   if (error instanceof StorageError) return error
   if (error instanceof Error && error.name === 'AbortError') {
     return new StorageError('aborted', `Resumable upload ${action} was aborted.`, true, {
@@ -92,7 +92,7 @@ export class TusStagingStore {
         throw new StorageError('invalid_input', 'Tus staging root is not a directory.', false)
       }
     } catch (error) {
-      throw asStagingError(error, 'initialization')
+      throw asTusStagingError(error, 'initialization')
     }
   }
 
@@ -108,7 +108,7 @@ export class TusStagingStore {
       constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | noFollow,
       fileMode,
     ).catch((error: unknown) => {
-      throw asStagingError(error, 'creation')
+      throw asTusStagingError(error, 'creation')
     })
     await handle.close()
   }
@@ -126,7 +126,7 @@ export class TusStagingStore {
         await handle.close()
       }
     } catch (error) {
-      throw asStagingError(error, 'metadata read')
+      throw asTusStagingError(error, 'metadata read')
     }
   }
 
@@ -140,7 +140,7 @@ export class TusStagingStore {
       }
       return handle.createReadStream({ autoClose: true })
     } catch (error) {
-      throw asStagingError(error, 'read')
+      throw asTusStagingError(error, 'read')
     }
   }
 
@@ -156,7 +156,7 @@ export class TusStagingStore {
       await pipeline(await this.open(uploadId), digest, { signal })
       return hash.digest('hex')
     } catch (error) {
-      throw asStagingError(error, 'checksum read')
+      throw asTusStagingError(error, 'checksum read')
     }
   }
 
@@ -258,7 +258,7 @@ export class TusStagingStore {
       if (error instanceof TusChecksumMismatchError || error instanceof TusOffsetMismatchError) {
         throw error
       }
-      throw asStagingError(error, 'append')
+      throw asTusStagingError(error, 'append')
     } finally {
       if (chunkHandle !== null) await chunkHandle.close().catch(() => undefined)
       await rm(chunkPath, { force: true }).catch(() => undefined)
@@ -275,13 +275,13 @@ export class TusStagingStore {
         await handle.close()
       }
     } catch (error) {
-      throw asStagingError(error, 'repair')
+      throw asTusStagingError(error, 'repair')
     }
   }
 
   async delete(uploadId: string): Promise<void> {
     await rm(this.#path(uploadId), { force: true }).catch((error: unknown) => {
-      throw asStagingError(error, 'deletion')
+      throw asTusStagingError(error, 'deletion')
     })
   }
 }

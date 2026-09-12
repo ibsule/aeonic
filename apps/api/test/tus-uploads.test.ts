@@ -14,7 +14,7 @@ import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
 import { ProjectService } from '../src/projects/service.js'
 import { createStorageRuntime, type StorageRuntime } from '../src/storage/factory.js'
 import { TusUploadService } from '../src/uploads/tus-service.js'
-import { TusStagingStore } from '../src/uploads/tus-staging.js'
+import { asTusStagingError, TusStagingStore } from '../src/uploads/tus-staging.js'
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -104,6 +104,47 @@ async function createUpload(
 }
 
 describe('tus resumable uploads', () => {
+  it('accepts a 5 GiB logical fixture without buffering the declared upload', async () => {
+    const fiveGiB = 5 * 1024 * 1024 * 1024
+    const { app, staging } = createTestApp()
+    const owner = await initializeOwner(app)
+    const created = await owner.agent
+      .post(owner.collection)
+      .set('tus-resumable', '1.0.0')
+      .set('upload-length', String(fiveGiB))
+      .set('upload-metadata', uploadMetadata({ filename: 'archive.mp4', filetype: 'video/mp4' }))
+      .send()
+
+    assert.equal(created.status, 201)
+    const location = created.headers.location as string
+    const uploadId = location.split('/').at(-1) as string
+    const probe = await owner.agent
+      .patch(location)
+      .set('tus-resumable', '1.0.0')
+      .set('upload-offset', '0')
+      .set('content-type', 'application/offset+octet-stream')
+      .send(Buffer.from('probe'))
+    const resumed = await owner.agent.head(location).set('tus-resumable', '1.0.0')
+
+    assert.equal(probe.status, 204)
+    assert.equal(resumed.status, 200)
+    assert.equal(resumed.headers['upload-length'], String(fiveGiB))
+    assert.equal(resumed.headers['upload-offset'], '5')
+    assert.equal(await staging.size(uploadId), 5)
+    assert.equal((await owner.agent.delete(location).set('tus-resumable', '1.0.0')).status, 204)
+  })
+
+  it('classifies exhausted staging storage as a retryable capacity failure', () => {
+    for (const code of ['ENOSPC', 'EDQUOT']) {
+      const cause = Object.assign(new Error(`simulated ${code}`), { code })
+      const error = asTusStagingError(cause, 'append')
+
+      assert.equal(error.code, 'quota_exceeded')
+      assert.equal(error.retryable, true)
+      assert.equal(error.cause, cause)
+    }
+  })
+
   it('advertises only implemented extensions through authenticated browser CORS', async () => {
     const { app } = createTestApp()
     const owner = await initializeOwner(app)
