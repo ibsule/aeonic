@@ -114,6 +114,48 @@ describe('Phase 2 domain schema', () => {
           .run(),
       /CHECK constraint failed: jobs_progress_range/,
     )
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(jobs)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.firstProjectId,
+            type: 'asset.inspect',
+            state: 'running',
+            payload: {},
+            runAfter: tenant.now,
+            createdBy: tenant.userId,
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /CHECK constraint failed: jobs_lease_consistent/,
+    )
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(jobs)
+          .values({
+            id: uuidv7(),
+            organizationId: tenant.firstOrganizationId,
+            projectId: tenant.firstProjectId,
+            type: 'asset.inspect',
+            state: 'succeeded',
+            payload: {},
+            progress: 99,
+            runAfter: tenant.now,
+            completedAt: tenant.now,
+            createdBy: tenant.userId,
+            createdAt: tenant.now,
+            updatedAt: tenant.now,
+          })
+          .run(),
+      /CHECK constraint failed: jobs_success_progress_complete/,
+    )
   })
 })
 

@@ -57,6 +57,13 @@
       "when": 1789147901602,
       "tag": "0007_pink_steve_rogers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789210469672,
+      "tag": "0008_supreme_sugar_man",
+      "breakpoints": true
     }
   ]
 }

@@ -410,6 +410,23 @@ export const jobs = sqliteTable(
     check('jobs_progress_range', sql`${table.progress} BETWEEN 0 AND 100`),
     check('jobs_attempts_nonnegative', sql`${table.attempts} >= 0`),
     check('jobs_max_attempts_positive', sql`${table.maxAttempts} > 0`),
+    check('jobs_attempts_within_max', sql`${table.attempts} <= ${table.maxAttempts}`),
+    check(
+      'jobs_state_valid',
+      sql`${table.state} IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')`,
+    ),
+    check(
+      'jobs_lease_consistent',
+      sql`(${table.state} = 'running' AND ${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL AND ${table.completedAt} IS NULL) OR (${table.state} <> 'running' AND ${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL)`,
+    ),
+    check(
+      'jobs_completion_consistent',
+      sql`(${table.state} IN ('succeeded', 'failed', 'cancelled')) = (${table.completedAt} IS NOT NULL)`,
+    ),
+    check(
+      'jobs_success_progress_complete',
+      sql`${table.state} <> 'succeeded' OR ${table.progress} = 100`,
+    ),
   ],
 )
 
