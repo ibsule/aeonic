@@ -231,7 +231,7 @@ describe('tus resumable uploads', () => {
       current_version: 1,
     })
     assert.deepEqual(database.client.prepare('select type, state from jobs').get(), {
-      type: 'media.inspect',
+      type: 'media.inspect.image',
       state: 'queued',
     })
     assert.equal(

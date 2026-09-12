@@ -108,7 +108,7 @@ export class UploadFinalizer {
           id: uuidv7(),
           organizationId: reservation.scope.organizationId,
           projectId: reservation.scope.projectId,
-          type: 'media.inspect',
+          type: `media.inspect.${reservation.descriptor.mediaKind}`,
           state: 'queued',
           payload: {
             assetId: reservation.assetId,

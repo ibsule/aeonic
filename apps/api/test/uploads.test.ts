@@ -106,7 +106,7 @@ describe('simple uploads', () => {
       database.client
         .prepare('select state, type from jobs where project_id = ?')
         .get(owner.projectId),
-      { state: 'queued', type: 'media.inspect' },
+      { state: 'queued', type: 'media.inspect.image' },
     )
     assert.equal(
       database.client

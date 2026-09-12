@@ -64,6 +64,13 @@
       "when": 1789210469672,
       "tag": "0008_supreme_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789211387781,
+      "tag": "0009_specialize_inspection_jobs",
+      "breakpoints": true
     }
   ]
 }

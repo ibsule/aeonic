@@ -8,6 +8,8 @@ import { v7 as uuidv7 } from 'uuid'
 import { openDatabase } from '../src/db/database.js'
 import {
   apikey,
+  assets,
+  jobs,
   member,
   organization,
   projectApiKeys,
@@ -346,6 +348,89 @@ describe('database', () => {
         )
 
       assert.throws(() => connection.migrate(), /__asset_versions_storage_key_guard/)
+    } finally {
+      connection.close()
+    }
+  })
+
+  it('specializes existing inspection jobs without losing tenant identity', () => {
+    const connection = openDatabase({
+      databasePath: createDatabasePath(),
+      databaseBusyTimeoutMs: 5_000,
+      databaseWalAutocheckpointPages: 1_000,
+    })
+
+    try {
+      connection.migrate(migrationSubset(8))
+      const now = new Date()
+      const userId = uuidv7()
+      const organizationId = uuidv7()
+      const projectId = uuidv7()
+      const assetId = uuidv7()
+      const jobId = uuidv7()
+      connection.db
+        .insert(user)
+        .values({ id: userId, name: 'Owner', email: 'jobs@example.com' })
+        .run()
+      connection.db
+        .insert(organization)
+        .values({ id: organizationId, name: 'Studio', slug: 'job-studio', createdAt: now })
+        .run()
+      connection.db
+        .insert(projects)
+        .values({
+          id: projectId,
+          organizationId,
+          name: 'Library',
+          slug: 'job-library',
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.db
+        .insert(assets)
+        .values({
+          id: assetId,
+          organizationId,
+          projectId,
+          publicId: uuidv7(),
+          name: 'Image',
+          mediaKind: 'image',
+          state: 'processing',
+          currentVersion: 1,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.db
+        .insert(jobs)
+        .values({
+          id: jobId,
+          organizationId,
+          projectId,
+          type: 'media.inspect',
+          payload: { assetId },
+          runAfter: now,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      connection.migrate()
+
+      assert.deepEqual(
+        connection.client
+          .prepare('select type, organization_id, project_id from jobs where id = ?')
+          .get(jobId),
+        {
+          type: 'media.inspect.image',
+          organization_id: organizationId,
+          project_id: projectId,
+        },
+      )
     } finally {
       connection.close()
     }
