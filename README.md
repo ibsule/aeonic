@@ -6,8 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.4 (in development)* provides the trustworthy API foundation, identity/control plane,
-and Phase 3 storage, ingestion, and original delivery. It currently
+*Version 0.4* provides the trustworthy API foundation, identity/control plane, and Phase 3 storage,
+ingestion, and original delivery. It currently
 ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.

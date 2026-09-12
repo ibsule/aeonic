@@ -50,7 +50,7 @@ const environmentSchema = z.object({
   PUBLIC_DELIVERY_CACHE_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(31_536_000),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.url().optional(),
-  AEONIC_VERSION: z.string().trim().min(1).default('0.3.0'),
+  AEONIC_VERSION: z.string().trim().min(1).default('0.4.0'),
 })
 
 export interface AppConfig {

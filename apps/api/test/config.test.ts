@@ -27,7 +27,7 @@ describe('configuration', () => {
     assert.equal(config.deliveryUrlTtlSeconds, 900)
     assert.equal(config.publicDeliveryCacheSeconds, 365 * 24 * 60 * 60)
     assert.equal(config.authBaseUrl, 'http://localhost:3001')
-    assert.equal(config.version, '0.3.0')
+    assert.equal(config.version, '0.4.0')
   })
 
   it('does not enable cross-origin access by default in production', () => {
