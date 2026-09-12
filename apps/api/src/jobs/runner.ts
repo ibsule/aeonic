@@ -94,6 +94,7 @@ export class JobRunner {
     const claimedAt = this.#now()
     const job = this.repository.claimNext(
       this.options.workerId,
+      [...this.handlers.keys()],
       claimedAt,
       new Date(claimedAt.getTime() + this.options.leaseMs),
     )

@@ -65,9 +65,23 @@ export class SqliteJobRepository implements JobRepository {
     )
   }
 
-  claimNext(workerId: string, now: Date, leaseUntil: Date): JobRecord | null {
+  claimNext(
+    workerId: string,
+    acceptedTypes: readonly string[],
+    now: Date,
+    leaseUntil: Date,
+  ): JobRecord | null {
     assertWorkerId(workerId)
     assertLease(now, leaseUntil)
+    if (acceptedTypes.length === 0) return null
+    if (
+      acceptedTypes.length > 32 ||
+      acceptedTypes.some((type) => !/^[a-z][a-z0-9_.-]{0,63}$/.test(type))
+    ) {
+      throw new TypeError('Accepted job types must be 1 to 32 stable lowercase identifiers.')
+    }
+    const uniqueTypes = [...new Set(acceptedTypes)]
+    const typePlaceholders = uniqueTypes.map(() => '?').join(', ')
     const claim = this.database.client.transaction(() => {
       this.database.client
         .prepare(
@@ -87,14 +101,15 @@ export class SqliteJobRepository implements JobRepository {
       const candidate = this.database.client
         .prepare(
           `select id
-             from jobs
+            from jobs
             where attempts < max_attempts
+              and type in (${typePlaceholders})
               and ((state = 'queued' and run_after <= ?)
                 or (state = 'running' and lease_expires_at <= ?))
             order by run_after asc, created_at asc, id asc
             limit 1`,
         )
-        .get(now.getTime(), now.getTime()) as { id: string } | undefined
+        .get(...uniqueTypes, now.getTime(), now.getTime()) as { id: string } | undefined
       if (!candidate) return null
 
       this.database.client

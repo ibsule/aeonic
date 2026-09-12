@@ -120,13 +120,13 @@ describe('job runner', () => {
     assert.equal(retry?.errorMessage, 'The job handler failed unexpectedly.')
   })
 
-  it('fails unsupported and explicitly terminal work without retrying', async () => {
+  it('leaves unsupported work queued and fails terminal handler errors without retrying', async () => {
     const unsupported = fixture('unknown.job')
     assert.equal(
       await unsupported.createRunner(new Map()).runOnce(new AbortController().signal),
-      'failed',
+      'idle',
     )
-    assert.equal(unsupported.repository.findById(unsupported.scope, unsupported.jobId)?.attempts, 1)
+    assert.equal(unsupported.repository.findById(unsupported.scope, unsupported.jobId)?.attempts, 0)
 
     const rejected = fixture()
     const runner = rejected.createRunner(

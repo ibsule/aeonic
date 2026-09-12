@@ -91,7 +91,12 @@ export interface AssetRepository {
 
 export interface JobRepository {
   findById(scope: TenantScope, jobId: string): JobRecord | null
-  claimNext(workerId: string, now: Date, leaseUntil: Date): JobRecord | null
+  claimNext(
+    workerId: string,
+    acceptedTypes: readonly string[],
+    now: Date,
+    leaseUntil: Date,
+  ): JobRecord | null
   heartbeat(jobId: string, workerId: string, now: Date, leaseUntil: Date): JobRecord
   updateProgress(jobId: string, workerId: string, now: Date, progress: number): JobRecord
   succeed(jobId: string, workerId: string, now: Date): JobRecord

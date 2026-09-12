@@ -94,11 +94,13 @@ describe('durable job repository', () => {
 
     const first = new SqliteJobRepository(firstDatabase).claimNext(
       'worker:first',
+      ['media.inspect'],
       seeded.now,
       leaseUntil,
     )
     const second = new SqliteJobRepository(secondDatabase).claimNext(
       'worker:second',
+      ['media.inspect'],
       seeded.now,
       leaseUntil,
     )
@@ -121,10 +123,17 @@ describe('durable job repository', () => {
     const dueId = enqueue(database, seeded)
     const firstLease = new Date(seeded.now.getTime() + 10_000)
 
-    assert.equal(repository.claimNext('worker:one', seeded.now, firstLease)?.id, dueId)
-    assert.equal(repository.claimNext('worker:two', seeded.now, firstLease), null)
+    assert.equal(
+      repository.claimNext('worker:one', ['media.inspect'], seeded.now, firstLease)?.id,
+      dueId,
+    )
+    assert.equal(
+      repository.claimNext('worker:two', ['media.inspect'], seeded.now, firstLease),
+      null,
+    )
     const reclaimed = repository.claimNext(
       'worker:two',
+      ['media.inspect'],
       firstLease,
       new Date(firstLease.getTime() + 10_000),
     )
@@ -142,7 +151,7 @@ describe('durable job repository', () => {
     const repository = new SqliteJobRepository(database)
     const jobId = enqueue(database, seeded)
     const initialExpiry = new Date(seeded.now.getTime() + 10_000)
-    repository.claimNext('worker:one', seeded.now, initialExpiry)
+    repository.claimNext('worker:one', ['media.inspect'], seeded.now, initialExpiry)
     const heartbeatAt = new Date(seeded.now.getTime() + 5_000)
     const extendedExpiry = new Date(seeded.now.getTime() + 20_000)
 
@@ -173,7 +182,7 @@ describe('durable job repository', () => {
     const repository = new SqliteJobRepository(database)
     const jobId = enqueue(database, seeded, { maxAttempts: 2 })
     const firstExpiry = new Date(seeded.now.getTime() + 10_000)
-    repository.claimNext('worker:one', seeded.now, firstExpiry)
+    repository.claimNext('worker:one', ['media.inspect'], seeded.now, firstExpiry)
 
     const retry = repository.fail(jobId, 'worker:one', seeded.now, {
       code: 'processor_timeout',
@@ -184,7 +193,12 @@ describe('durable job repository', () => {
     assert.equal(retry.completedAt, null)
 
     const retryTime = retry.runAfter
-    repository.claimNext('worker:two', retryTime, new Date(retryTime.getTime() + 10_000))
+    repository.claimNext(
+      'worker:two',
+      ['media.inspect'],
+      retryTime,
+      new Date(retryTime.getTime() + 10_000),
+    )
     const failed = repository.fail(jobId, 'worker:two', retryTime, {
       code: 'invalid_media',
       message: 'The decoder rejected the media.',
@@ -203,10 +217,15 @@ describe('durable job repository', () => {
     const repository = new SqliteJobRepository(database)
     const jobId = enqueue(database, seeded, { maxAttempts: 1 })
     const expiry = new Date(seeded.now.getTime() + 10_000)
-    repository.claimNext('worker:one', seeded.now, expiry)
+    repository.claimNext('worker:one', ['media.inspect'], seeded.now, expiry)
 
     assert.equal(
-      repository.claimNext('worker:two', expiry, new Date(expiry.getTime() + 10_000)),
+      repository.claimNext(
+        'worker:two',
+        ['media.inspect'],
+        expiry,
+        new Date(expiry.getTime() + 10_000),
+      ),
       null,
     )
     const failed = repository.findById(seeded.scope, jobId)
@@ -224,5 +243,24 @@ describe('durable job repository', () => {
 
     assert.equal(repository.findById(seeded.scope, jobId)?.id, jobId)
     assert.equal(repository.findById({ ...seeded.scope, projectId: uuidv7() }, jobId), null)
+  })
+
+  it('claims only job types registered by the worker', () => {
+    const database = createDatabase()
+    database.migrate()
+    const seeded = seedProject(database)
+    const repository = new SqliteJobRepository(database)
+    const jobId = enqueue(database, seeded)
+    const leaseUntil = new Date(seeded.now.getTime() + 10_000)
+
+    assert.equal(repository.claimNext('worker:one', [], seeded.now, leaseUntil), null)
+    assert.equal(
+      repository.claimNext('worker:one', ['media.transform'], seeded.now, leaseUntil),
+      null,
+    )
+    assert.equal(
+      repository.claimNext('worker:one', ['media.inspect'], seeded.now, leaseUntil)?.id,
+      jobId,
+    )
   })
 })
