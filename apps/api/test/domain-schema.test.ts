@@ -9,6 +9,7 @@ import {
   organization,
   projects,
   storageObjects,
+  transformPresets,
   uploads,
   user,
 } from '../src/db/schema.js'
@@ -242,6 +243,90 @@ describe('Phase 3 storage schema', () => {
           })
           .run(),
       /CHECK constraint failed: uploads_expected_checksum_valid/,
+    )
+  })
+})
+
+describe('Phase 4 transform preset schema', () => {
+  it('keeps immutable preset versions tenant-scoped and uniquely addressable', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+    const preset = {
+      id: uuidv7(),
+      organizationId: tenant.firstOrganizationId,
+      projectId: tenant.firstProjectId,
+      name: 'product-card',
+      version: 1,
+      grammarVersion: 1,
+      canonicalSpec: 'w_800,h_600,f_webp',
+      definition: {
+        grammarVersion: 1 as const,
+        autoOrient: true as const,
+        width: 800,
+        height: 600,
+        fit: 'cover' as const,
+        gravity: 'center' as const,
+        format: 'webp' as const,
+        quality: 80,
+      },
+      createdBy: tenant.userId,
+      createdAt: tenant.now,
+    }
+    database.db.insert(transformPresets).values(preset).run()
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(transformPresets)
+          .values({ ...preset, id: uuidv7() })
+          .run(),
+      /UNIQUE constraint failed/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(transformPresets)
+          .values({ ...preset, id: uuidv7(), projectId: tenant.secondProjectId })
+          .run(),
+      /FOREIGN KEY constraint failed/,
+    )
+  })
+
+  it('rejects malformed names and unsupported grammar versions', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+    const preset = {
+      id: uuidv7(),
+      organizationId: tenant.firstOrganizationId,
+      projectId: tenant.firstProjectId,
+      name: 'hero--latest',
+      version: 1,
+      grammarVersion: 1,
+      canonicalSpec: 'w_1200',
+      definition: {
+        grammarVersion: 1 as const,
+        autoOrient: true as const,
+        width: 1200,
+        fit: 'cover' as const,
+        gravity: 'center' as const,
+        format: 'source' as const,
+        quality: 80,
+      },
+      createdBy: tenant.userId,
+      createdAt: tenant.now,
+    }
+
+    assert.throws(
+      () => database.db.insert(transformPresets).values(preset).run(),
+      /CHECK constraint failed: transform_presets_name_valid/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(transformPresets)
+          .values({ ...preset, id: uuidv7(), name: 'hero', grammarVersion: 2 })
+          .run(),
+      /CHECK constraint failed: transform_presets_grammar_v1/,
     )
   })
 })

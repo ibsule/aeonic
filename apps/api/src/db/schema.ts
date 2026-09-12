@@ -1,3 +1,4 @@
+import type { ImageTransformPlanV1 } from '@aeonic/contracts'
 import { sql } from 'drizzle-orm'
 import {
   check,
@@ -276,6 +277,59 @@ export const assetVersions = sqliteTable(
     check(
       'asset_versions_sha256_valid',
       sql`${table.sha256} IS NULL OR (length(${table.sha256}) = 64 AND ${table.sha256} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+  ],
+)
+
+export const transformPresets = sqliteTable(
+  'transform_presets',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    name: text('name').notNull(),
+    version: integer('version').notNull(),
+    grammarVersion: integer('grammar_version').notNull(),
+    canonicalSpec: text('canonical_spec').notNull(),
+    definition: text('definition', { mode: 'json' }).$type<ImageTransformPlanV1>().notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'transform_presets_project_organization_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('transform_presets_project_name_version_unique').on(
+      table.projectId,
+      table.name,
+      table.version,
+    ),
+    uniqueIndex('transform_presets_id_tenant_unique').on(
+      table.id,
+      table.organizationId,
+      table.projectId,
+    ),
+    index('transform_presets_project_name_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.name,
+      table.version,
+    ),
+    check('transform_presets_version_positive', sql`${table.version} > 0`),
+    check('transform_presets_grammar_v1', sql`${table.grammarVersion} = 1`),
+    check(
+      'transform_presets_name_valid',
+      sql`length(${table.name}) BETWEEN 1 AND 64 AND ${table.name} NOT GLOB '*[^a-z0-9-]*' AND substr(${table.name}, 1, 1) GLOB '[a-z]' AND substr(${table.name}, -1, 1) GLOB '[a-z0-9]' AND ${table.name} NOT GLOB '*--*'`,
+    ),
+    check(
+      'transform_presets_spec_valid',
+      sql`length(${table.canonicalSpec}) BETWEEN 1 AND 256 AND ${table.canonicalSpec} NOT GLOB '*[^a-z0-9_.,]*'`,
     ),
   ],
 )

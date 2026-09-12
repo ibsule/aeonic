@@ -71,6 +71,13 @@
       "when": 1789211387781,
       "tag": "0009_specialize_inspection_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789213313185,
+      "tag": "0010_chilly_marvel_boy",
+      "breakpoints": true
     }
   ]
 }
