@@ -26,7 +26,7 @@ function assertLease(now: Date, leaseUntil: Date): void {
   }
 }
 
-function assertFailure(failure: { code: string; message: string }): void {
+function assertFailure(failure: { code: string; message: string; retryable?: boolean }): void {
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(failure.code)) {
     throw new TypeError('Job failure codes must be stable lowercase identifiers.')
   }
@@ -153,13 +153,13 @@ export class SqliteJobRepository implements JobRepository {
     jobId: string,
     workerId: string,
     now: Date,
-    failure: { code: string; message: string },
+    failure: { code: string; message: string; retryable?: boolean },
   ): JobRecord {
     assertWorkerId(workerId)
     assertFailure(failure)
     const transaction = this.database.client.transaction(() => {
       const current = this.requireLease(jobId, workerId, now)
-      const exhausted = current.attempts >= current.maxAttempts
+      const exhausted = failure.retryable === false || current.attempts >= current.maxAttempts
       const runAfter = new Date(now.getTime() + retryDelayMs(current.attempts))
       this.database.client
         .prepare(

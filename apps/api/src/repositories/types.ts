@@ -99,7 +99,7 @@ export interface JobRepository {
     jobId: string,
     workerId: string,
     now: Date,
-    failure: { code: string; message: string },
+    failure: { code: string; message: string; retryable?: boolean },
   ): JobRecord
 }
 
