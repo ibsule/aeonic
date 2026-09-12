@@ -50,8 +50,18 @@ export interface JobRecord extends TenantScope {
   id: string
   type: string
   state: JobState
+  payload: Record<string, unknown>
+  progress: number
   attempts: number
   maxAttempts: number
+  runAfter: Date
+  leaseOwner: string | null
+  leaseExpiresAt: Date | null
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: Date
+  updatedAt: Date
+  completedAt: Date | null
 }
 
 export interface StorageObjectRecord extends TenantScope {
@@ -82,6 +92,15 @@ export interface AssetRepository {
 export interface JobRepository {
   findById(scope: TenantScope, jobId: string): JobRecord | null
   claimNext(workerId: string, now: Date, leaseUntil: Date): JobRecord | null
+  heartbeat(jobId: string, workerId: string, now: Date, leaseUntil: Date): JobRecord
+  updateProgress(jobId: string, workerId: string, now: Date, progress: number): JobRecord
+  succeed(jobId: string, workerId: string, now: Date): JobRecord
+  fail(
+    jobId: string,
+    workerId: string,
+    now: Date,
+    failure: { code: string; message: string },
+  ): JobRecord
 }
 
 export interface StorageObjectRepository {
