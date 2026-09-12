@@ -10,7 +10,9 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "auth:schema": "auth generate --config src/auth/schema-config.ts --output src/db/auth-schema.ts --adapter drizzle --dialect sqlite --yes",
     "dev": "tsx watch src/index.ts",
+    "dev:worker": "tsx watch src/worker.ts",
     "start": "node --enable-source-maps dist/index.js",
+    "start:worker": "node --enable-source-maps dist/worker.js",
     "test": "node --import tsx --test test/*.test.ts",
     "test:s3": "node --import tsx --test test/*s3*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"

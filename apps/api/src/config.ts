@@ -44,6 +44,21 @@ const environmentSchema = z.object({
     .max(Number.MAX_SAFE_INTEGER)
     .default(10_737_418_240),
   UPLOAD_STALE_AFTER_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(3_600_000),
+  WORKER_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9._:-]{1,128}$/)
+    .optional(),
+  WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1_000),
+  WORKER_LEASE_MS: z.coerce.number().int().min(5_000).max(600_000).default(30_000),
+  WORKER_HEARTBEAT_MS: z.coerce.number().int().min(1_000).max(300_000).default(10_000),
+  WORKER_JOB_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(1_800_000).default(120_000),
+  IMAGE_MAX_INPUT_PIXELS: z.coerce
+    .number()
+    .int()
+    .min(1_000_000)
+    .max(500_000_000)
+    .default(100_000_000),
+  IMAGE_MAX_FRAMES: z.coerce.number().int().min(1).max(1_000).default(100),
   DELIVERY_BASE_URL: z.url().optional(),
   DELIVERY_SIGNING_KEYS: z.string().optional(),
   DELIVERY_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
@@ -82,6 +97,13 @@ export interface AppConfig {
   readonly tusUploadExpirationMs: number
   readonly projectStorageQuotaBytes: number
   readonly uploadStaleAfterMs: number
+  readonly workerId?: string
+  readonly workerPollMs: number
+  readonly workerLeaseMs: number
+  readonly workerHeartbeatMs: number
+  readonly workerJobTimeoutMs: number
+  readonly imageMaxInputPixels: number
+  readonly imageMaxFrames: number
   readonly deliveryBaseUrl: string
   readonly deliverySigningKeys: readonly DeliverySigningKey[]
   readonly deliveryUrlTtlSeconds: number
@@ -227,6 +249,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     'DELIVERY_BASE_URL',
     value.NODE_ENV,
   )
+  if (value.WORKER_HEARTBEAT_MS * 2 >= value.WORKER_LEASE_MS) {
+    throw new ConfigurationError(
+      'Invalid configuration: WORKER_HEARTBEAT_MS must be less than half WORKER_LEASE_MS',
+    )
+  }
 
   return Object.freeze({
     environment: value.NODE_ENV,
@@ -259,6 +286,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     tusUploadExpirationMs: value.TUS_UPLOAD_EXPIRATION_MS,
     projectStorageQuotaBytes: value.PROJECT_STORAGE_QUOTA_BYTES,
     uploadStaleAfterMs: value.UPLOAD_STALE_AFTER_MS,
+    ...(value.WORKER_ID === undefined ? {} : { workerId: value.WORKER_ID }),
+    workerPollMs: value.WORKER_POLL_MS,
+    workerLeaseMs: value.WORKER_LEASE_MS,
+    workerHeartbeatMs: value.WORKER_HEARTBEAT_MS,
+    workerJobTimeoutMs: value.WORKER_JOB_TIMEOUT_MS,
+    imageMaxInputPixels: value.IMAGE_MAX_INPUT_PIXELS,
+    imageMaxFrames: value.IMAGE_MAX_FRAMES,
     deliveryBaseUrl,
     deliverySigningKeys: Object.freeze(
       parseDeliverySigningKeys(value.DELIVERY_SIGNING_KEYS, value.NODE_ENV).map((key) =>

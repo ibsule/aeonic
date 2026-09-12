@@ -30,11 +30,14 @@ ships:
 - Immutable original-asset delivery over local or S3-compatible storage, including authenticated
   reads, expiring signed URLs, conditional requests, and single byte ranges.
 - Project-scoped storage usage, quota, health, and sanitized failure diagnostics.
+- A standalone crash-safe worker that performs bounded image inspection and records decoder
+  metadata before making an image ready.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Decoder-level media inspection, transformations, the dashboard, Docker Compose, and AI features are
-**not implemented yet**. Accepted uploads remain in `processing` with a durable `media.inspect` job
-until the Phase 4 worker is implemented; only ready versions can be delivered.
+Video/document inspection, transformations, the dashboard, Docker Compose, and AI features are
+**not implemented yet**. Run the media worker to inspect accepted images; video and document
+uploads remain in `processing` until their Phase 4 handlers are implemented. Only ready versions
+can be delivered.
 
 ## Requirements
 
@@ -48,6 +51,14 @@ corepack enable
 pnpm install --frozen-lockfile
 pnpm check
 pnpm dev
+```
+
+Run the API and media worker in separate terminals. Both processes must use the same database and
+storage configuration:
+
+```bash
+pnpm --filter @aeonic/api dev
+pnpm --filter @aeonic/api dev:worker
 ```
 
 The API listens on `http://localhost:3001` by default.
@@ -122,6 +133,8 @@ of the runtime.
 | Command | Purpose |
 |---|---|
 | `pnpm dev` | Build workspace dependencies and run development watchers |
+| `pnpm --filter @aeonic/api dev:worker` | Run the media worker in watch mode |
+| `pnpm --filter @aeonic/api start:worker` | Run the compiled media worker |
 | `pnpm build` | Produce clean ESM output for every package |
 | `pnpm --filter @aeonic/api db:migrate` | Apply checked-in database migrations |
 | `pnpm --filter @aeonic/api auth:schema` | Regenerate the Better Auth Drizzle schema |

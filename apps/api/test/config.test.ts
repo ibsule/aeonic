@@ -21,6 +21,9 @@ describe('configuration', () => {
     assert.equal(config.tusUploadMaxBytes, 5 * 1024 * 1024 * 1024)
     assert.equal(config.tusUploadExpirationMs, 24 * 60 * 60 * 1_000)
     assert.equal(config.projectStorageQuotaBytes, 10 * 1024 * 1024 * 1024)
+    assert.equal(config.workerLeaseMs, 30_000)
+    assert.equal(config.workerHeartbeatMs, 10_000)
+    assert.equal(config.imageMaxInputPixels, 100_000_000)
     assert.equal(config.uploadStaleAfterMs, 60 * 60 * 1_000)
     assert.equal(config.deliveryBaseUrl, 'http://localhost:3001')
     assert.equal(config.deliverySigningKeys[0]?.id, 'development')
@@ -84,6 +87,18 @@ describe('configuration', () => {
     assert.throws(
       () => loadConfig({ CORS_ORIGINS: 'https://example.com/path' }),
       ConfigurationError,
+    )
+  })
+
+  it('requires worker heartbeats to leave enough lease safety margin', () => {
+    assert.throws(
+      () =>
+        loadConfig({
+          NODE_ENV: 'test',
+          WORKER_LEASE_MS: '10000',
+          WORKER_HEARTBEAT_MS: '5000',
+        }),
+      /WORKER_HEARTBEAT_MS must be less than half WORKER_LEASE_MS/,
     )
   })
 
