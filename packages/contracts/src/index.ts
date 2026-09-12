@@ -59,6 +59,20 @@ export {
   storageFailureSummarySchema,
 } from './storage.js'
 export {
+  type CanonicalImageTransformV1,
+  type ImageTransformPlanV1,
+  parseImageTransformV1,
+  type TransformFit,
+  type TransformFormat,
+  type TransformGravity,
+  TransformSpecError,
+  type TransformSpecErrorCode,
+  transformFits,
+  transformFormats,
+  transformGrammarVersion,
+  transformGravities,
+} from './transforms.js'
+export {
   type MediaKind,
   mediaKinds,
   type SimpleUploadResult,
