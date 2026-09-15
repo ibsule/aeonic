@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { parseImageTransformV1, TransformSpecError } from '@aeonic/contracts'
+import {
+  createTransformPresetSelector,
+  parseImageTransformV1,
+  parseTransformPresetSelector,
+  TransformSpecError,
+} from '@aeonic/contracts'
 
 function assertTransformError(specification: string, code: TransformSpecError['code']): void {
   assert.throws(
@@ -10,6 +15,14 @@ function assertTransformError(specification: string, code: TransformSpecError['c
 }
 
 describe('image transform grammar v1', () => {
+  it('round-trips immutable named-preset selectors', () => {
+    const selector = createTransformPresetSelector('product-card', 12)
+    assert.equal(selector, 'p_product-card.v12')
+    assert.deepEqual(parseTransformPresetSelector(selector), { name: 'product-card', version: 12 })
+    assert.equal(parseTransformPresetSelector('p_product--card.v12'), null)
+    assert.equal(parseTransformPresetSelector('p_product-card.v0'), null)
+  })
+
   it('normalizes ordering, numbers, and defaults into one canonical identity', () => {
     const first = parseImageTransformV1('q_080,f_auto,fit_cover,h_0600,w_0800,g_center')
     const second = parseImageTransformV1('w_800,h_600,f_auto')

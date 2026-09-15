@@ -6,6 +6,8 @@ import {
   createDeliveryUrlRequestSchema,
   createdApiKeySchema,
   createProjectRequestSchema,
+  createTransformPresetRequestSchema,
+  createTransformPresetVersionRequestSchema,
   deliveryUrlSchema,
   problemDetailsSchema,
   projectListSchema,
@@ -19,6 +21,8 @@ import {
   setupStatusSchema,
   simpleUploadResultSchema,
   storageFailureSummarySchema,
+  transformPresetListSchema,
+  transformPresetSchema,
   updateProjectRequestSchema,
   uploadQuerySchema,
 } from '@aeonic/contracts'
@@ -136,6 +140,9 @@ const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filen
 const tusCollectionPath = `${projectItemPath}/tus`
 const tusItemPath = `${tusCollectionPath}/{uploadId}`
 const storageOverviewPath = `${projectItemPath}/storage`
+const transformPresetCollectionPath = `${projectItemPath}/transform-presets`
+const transformPresetVersionCollectionPath = `${transformPresetCollectionPath}/{presetName}/versions`
+const transformPresetVersionPath = `${transformPresetVersionCollectionPath}/{presetVersion}`
 
 const tusResponseHeaders = {
   'Tus-Resumable': { schema: { type: 'string', const: '1.0.0' } },
@@ -172,6 +179,10 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       { name: 'Resumable uploads', description: 'Authenticated tus 1.0 media ingestion.' },
       { name: 'Storage', description: 'Project usage, quota, and backend diagnostics.' },
       { name: 'Delivery', description: 'Authorized original-asset streaming and sharing.' },
+      {
+        name: 'Transform presets',
+        description: 'Named and permanently versioned canonical image transformations.',
+      },
     ],
     paths: {
       '/health/live': {
@@ -651,6 +662,80 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           },
         },
       },
+      [transformPresetCollectionPath]: {
+        get: {
+          operationId: 'listTransformPresets',
+          tags: ['Transform presets'],
+          summary: 'List every immutable transform-preset version in a project',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            { name: 'cursor', in: 'query', schema: { type: 'string', format: 'uuid' } },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+            },
+          ],
+          responses: {
+            '200': jsonResponse('Project transform presets.', 'TransformPresetList'),
+            ...standardErrors,
+          },
+        },
+        post: {
+          operationId: 'createTransformPreset',
+          tags: ['Transform presets'],
+          summary: 'Create the first immutable version of a named transform preset',
+          security: cookieSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          requestBody: jsonBody('CreateTransformPresetRequest'),
+          responses: {
+            '201': jsonResponse('Transform preset created.', 'TransformPreset', {
+              Location: { schema: { type: 'string', format: 'uri-reference' } },
+            }),
+            ...standardErrors,
+          },
+        },
+      },
+      [transformPresetVersionCollectionPath]: {
+        post: {
+          operationId: 'createTransformPresetVersion',
+          tags: ['Transform presets'],
+          summary: 'Create the next immutable version of a transform preset',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PresetName'),
+          ],
+          requestBody: jsonBody('CreateTransformPresetVersionRequest'),
+          responses: {
+            '201': jsonResponse('Transform preset version created.', 'TransformPreset', {
+              Location: { schema: { type: 'string', format: 'uri-reference' } },
+            }),
+            ...standardErrors,
+          },
+        },
+      },
+      [transformPresetVersionPath]: {
+        get: {
+          operationId: 'getTransformPresetVersion',
+          tags: ['Transform presets'],
+          summary: 'Get one exact immutable transform-preset version',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PresetName'),
+            parameter('PresetVersion'),
+          ],
+          responses: {
+            '200': jsonResponse('Exact transform preset version.', 'TransformPreset'),
+            ...standardErrors,
+          },
+        },
+      },
       [deliveryUrlPath]: {
         post: {
           operationId: 'createOriginalDeliveryUrl',
@@ -918,6 +1003,18 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           required: true,
           schema: { type: 'string', format: 'uuid' },
         },
+        PresetName: {
+          name: 'presetName',
+          in: 'path',
+          required: true,
+          schema: createTransformPresetRequestSchema.properties.name,
+        },
+        PresetVersion: {
+          name: 'presetVersion',
+          in: 'path',
+          required: true,
+          schema: { type: 'integer', minimum: 1 },
+        },
         IfMatch: {
           name: 'If-Match',
           in: 'header',
@@ -959,6 +1056,10 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         DeliveryUrl: component(deliveryUrlSchema),
         StorageFailureSummary: component(storageFailureSummarySchema),
         ProjectStorageOverview: component(projectStorageOverviewSchema),
+        CreateTransformPresetRequest: component(createTransformPresetRequestSchema),
+        CreateTransformPresetVersionRequest: component(createTransformPresetVersionRequestSchema),
+        TransformPreset: component(transformPresetSchema),
+        TransformPresetList: component(transformPresetListSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

@@ -39,6 +39,144 @@ export interface CanonicalImageTransformV1 {
   readonly plan: ImageTransformPlanV1
 }
 
+export const transformPresetNamePattern = '^[a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,63}$'
+const transformPresetNameExpression = new RegExp(transformPresetNamePattern)
+
+export function isTransformPresetName(value: string): boolean {
+  return transformPresetNameExpression.test(value)
+}
+
+export function createTransformPresetSelector(name: string, version: number): string {
+  if (!isTransformPresetName(name) || !Number.isSafeInteger(version) || version < 1) {
+    throw new TypeError('A preset selector requires a valid name and positive integer version.')
+  }
+  return `p_${name}.v${version}`
+}
+
+export interface TransformPresetSelector {
+  readonly name: string
+  readonly version: number
+}
+
+export function parseTransformPresetSelector(value: string): TransformPresetSelector | null {
+  const matched = /^p_([a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,63})\.v([1-9]\d{0,15})$/.exec(value)
+  if (!matched) return null
+  const version = Number(matched[2])
+  if (!Number.isSafeInteger(version)) return null
+  return Object.freeze({ name: matched[1] as string, version })
+}
+
+export const imageTransformPlanV1Schema = {
+  $id: 'ImageTransformPlanV1',
+  type: 'object',
+  additionalProperties: false,
+  required: ['grammarVersion', 'autoOrient', 'fit', 'gravity', 'format', 'quality'],
+  properties: {
+    grammarVersion: { type: 'integer', const: transformGrammarVersion },
+    autoOrient: { type: 'boolean', const: true },
+    fit: { type: 'string', enum: transformFits },
+    gravity: { type: 'string', enum: transformGravities },
+    format: { type: 'string', enum: transformFormats },
+    quality: { type: 'integer', minimum: 1, maximum: 100 },
+    width: { type: 'integer', minimum: 1, maximum: 8_192 },
+    height: { type: 'integer', minimum: 1, maximum: 8_192 },
+    blur: { type: 'number', minimum: 0.3, maximum: 100 },
+    sharpen: { type: 'number', minimum: 0.3, maximum: 10 },
+  },
+} as const
+
+export const createTransformPresetRequestSchema = {
+  $id: 'CreateTransformPresetRequest',
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'transform'],
+  properties: {
+    name: { type: 'string', pattern: transformPresetNamePattern, maxLength: 64 },
+    transform: { type: 'string', minLength: 1, maxLength: 256 },
+  },
+} as const
+
+export interface CreateTransformPresetRequest {
+  name: string
+  transform: string
+}
+
+export const createTransformPresetVersionRequestSchema = {
+  $id: 'CreateTransformPresetVersionRequest',
+  type: 'object',
+  additionalProperties: false,
+  required: ['transform'],
+  properties: {
+    transform: { type: 'string', minLength: 1, maxLength: 256 },
+  },
+} as const
+
+export interface CreateTransformPresetVersionRequest {
+  transform: string
+}
+
+export const transformPresetSchema = {
+  $id: 'TransformPreset',
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id',
+    'organizationId',
+    'projectId',
+    'name',
+    'version',
+    'selector',
+    'canonicalSpec',
+    'definition',
+    'createdBy',
+    'createdAt',
+  ],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    organizationId: { type: 'string', format: 'uuid' },
+    projectId: { type: 'string', format: 'uuid' },
+    name: { type: 'string', pattern: transformPresetNamePattern, maxLength: 64 },
+    version: { type: 'integer', minimum: 1 },
+    selector: {
+      type: 'string',
+      pattern: '^p_[a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,63}\\.v[1-9][0-9]*$',
+    },
+    canonicalSpec: { type: 'string', minLength: 1, maxLength: 256 },
+    definition: imageTransformPlanV1Schema,
+    createdBy: { type: 'string', format: 'uuid' },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+} as const
+
+export interface TransformPreset {
+  id: string
+  organizationId: string
+  projectId: string
+  name: string
+  version: number
+  selector: string
+  canonicalSpec: string
+  definition: ImageTransformPlanV1
+  createdBy: string
+  createdAt: string
+}
+
+export const transformPresetListSchema = {
+  $id: 'TransformPresetList',
+  type: 'object',
+  additionalProperties: false,
+  required: ['items', 'nextCursor'],
+  properties: {
+    items: { type: 'array', maxItems: 100, items: transformPresetSchema },
+    nextCursor: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] },
+  },
+} as const
+
+export interface TransformPresetList {
+  items: TransformPreset[]
+  nextCursor: string | null
+}
+
 export type TransformSpecErrorCode =
   | 'empty_transform'
   | 'transform_too_long'

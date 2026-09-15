@@ -32,12 +32,14 @@ ships:
 - Project-scoped storage usage, quota, health, and sanitized failure diagnostics.
 - A standalone crash-safe worker that performs bounded image inspection and records decoder
   metadata before making an image ready.
+- A versioned, canonical image-transform grammar and an audited API for immutable named preset
+  versions.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Video/document inspection, transformations, the dashboard, Docker Compose, and AI features are
-**not implemented yet**. Run the media worker to inspect accepted images; video and document
-uploads remain in `processing` until their Phase 4 handlers are implemented. Only ready versions
-can be delivered.
+Video/document inspection, derivative generation and delivery, the dashboard, Docker Compose, and
+AI features are **not implemented yet**. Run the media worker to inspect accepted images; video and
+document uploads remain in `processing` until their Phase 4 handlers are implemented. Only ready
+versions can be delivered.
 
 ## Requirements
 
