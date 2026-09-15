@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { createOriginalDeliveryPath, DeliverySigner } from '../src/delivery/signing.js'
+import {
+  createOriginalDeliveryPath,
+  createTransformDeliveryPath,
+  DeliverySigner,
+} from '../src/delivery/signing.js'
 
 const primary = Buffer.alloc(32, 1).toString('base64url')
 const previous = Buffer.alloc(32, 2).toString('base64url')
@@ -56,6 +60,29 @@ describe('delivery URL signing', () => {
     assert.equal(
       rotatedSigner.verify(
         { ...oldSignature, signature: 'invalid', path, disposition: 'inline' },
+        now,
+      ),
+      false,
+    )
+  })
+
+  it('binds transform signatures to the complete canonical path', () => {
+    const signer = new DeliverySigner([{ id: 'current', secret: primary }])
+    const path = createTransformDeliveryPath({
+      projectId: '019cc836-950f-7f99-88e0-b718f1c86e6a',
+      publicId: '019cc836-a354-7ed3-911d-6aed9bfac20d',
+      version: 2,
+      canonicalSpec: 'w_800,f_auto,q_75',
+      filename: 'hero image.jpg',
+    })
+    const signature = signer.create(path, 2_000_000_000, 'inline')
+    const now = new Date(1_900_000_000_000)
+
+    assert.match(path, /\/t\/w_800%2Cf_auto%2Cq_75\/hero%20image\.jpg$/)
+    assert.equal(signer.verify({ ...signature, path, disposition: 'inline' }, now), true)
+    assert.equal(
+      signer.verify(
+        { ...signature, path: path.replace('w_800', 'w_801'), disposition: 'inline' },
         now,
       ),
       false,

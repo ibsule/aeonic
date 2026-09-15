@@ -79,3 +79,13 @@ export function createOriginalDeliveryPath(input: {
 }): string {
   return `/m/${encodeURIComponent(input.projectId)}/${encodeURIComponent(input.publicId)}/v${input.version}/original/${encodeURIComponent(input.filename)}`
 }
+
+export function createTransformDeliveryPath(input: {
+  projectId: string
+  publicId: string
+  version: number
+  canonicalSpec: string
+  filename: string
+}): string {
+  return `/m/${encodeURIComponent(input.projectId)}/${encodeURIComponent(input.publicId)}/v${input.version}/t/${encodeURIComponent(input.canonicalSpec)}/${encodeURIComponent(input.filename)}`
+}
