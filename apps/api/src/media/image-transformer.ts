@@ -3,6 +3,11 @@ import type { ImageTransformPlanV1, TransformFormat } from '@aeonic/contracts'
 import sharp from 'sharp'
 
 export type ImageOutputFormat = Exclude<TransformFormat, 'source' | 'auto'>
+export const imageProcessorRevision = 'aeonic-image-v1'
+
+export function imageProcessorFingerprint(): string {
+  return `${imageProcessorRevision};sharp=${sharp.versions.sharp};libvips=${sharp.versions.vips}`
+}
 
 export interface ImageTransformLimits {
   readonly maxInputPixels: number
@@ -19,6 +24,7 @@ export interface ImageTransformOutput {
     readonly version: string
     readonly engine: 'libvips'
     readonly engineVersion: string
+    readonly fingerprint: string
   }
 }
 
@@ -156,6 +162,7 @@ export async function transformImage(
         version: sharp.versions.sharp,
         engine: 'libvips',
         engineVersion: sharp.versions.vips,
+        fingerprint: imageProcessorFingerprint(),
       },
     }
   } catch (error) {
