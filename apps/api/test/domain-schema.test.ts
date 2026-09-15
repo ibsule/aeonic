@@ -5,6 +5,8 @@ import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
 import {
   assets,
+  assetVersions,
+  derivatives,
   jobs,
   organization,
   projects,
@@ -327,6 +329,148 @@ describe('Phase 4 transform preset schema', () => {
           .values({ ...preset, id: uuidv7(), name: 'hero', grammarVersion: 2 })
           .run(),
       /CHECK constraint failed: transform_presets_grammar_v1/,
+    )
+  })
+})
+
+describe('Phase 4 derivative cache schema', () => {
+  it('enforces tenant-scoped single-flight cache identities', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+    const assetId = uuidv7()
+    const assetVersionId = uuidv7()
+    database.db
+      .insert(assets)
+      .values({
+        id: assetId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        publicId: uuidv7(),
+        name: 'Source image',
+        mediaKind: 'image',
+        state: 'ready',
+        currentVersion: 1,
+        createdBy: tenant.userId,
+        createdAt: tenant.now,
+        updatedAt: tenant.now,
+      })
+      .run()
+    database.db
+      .insert(assetVersions)
+      .values({
+        id: assetVersionId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        assetId,
+        version: 1,
+        state: 'ready',
+        sha256: '1'.repeat(64),
+        mimeType: 'image/jpeg',
+        sizeBytes: 100,
+        createdBy: tenant.userId,
+        createdAt: tenant.now,
+      })
+      .run()
+
+    const derivative = {
+      id: uuidv7(),
+      organizationId: tenant.firstOrganizationId,
+      projectId: tenant.firstProjectId,
+      assetVersionId,
+      cacheKey: '2'.repeat(64),
+      grammarVersion: 1,
+      canonicalSpec: 'w_800,f_webp',
+      outputFormat: 'webp' as const,
+      processorFingerprint: 'sharp@0.35.4/libvips@8.18.6',
+      createdBy: tenant.userId,
+      createdAt: tenant.now,
+      updatedAt: tenant.now,
+    }
+    database.db.insert(derivatives).values(derivative).run()
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(derivatives)
+          .values({ ...derivative, id: uuidv7() })
+          .run(),
+      /UNIQUE constraint failed/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(derivatives)
+          .values({
+            ...derivative,
+            id: uuidv7(),
+            cacheKey: '3'.repeat(64),
+            projectId: tenant.secondProjectId,
+          })
+          .run(),
+      /FOREIGN KEY constraint failed/,
+    )
+  })
+
+  it('requires leases while generating and complete metadata when ready', () => {
+    const database = createDatabase()
+    const tenant = seedTenants(database)
+    const assetId = uuidv7()
+    const assetVersionId = uuidv7()
+    database.db
+      .insert(assets)
+      .values({
+        id: assetId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        publicId: uuidv7(),
+        name: 'Source image',
+        mediaKind: 'image',
+        createdBy: tenant.userId,
+        createdAt: tenant.now,
+        updatedAt: tenant.now,
+      })
+      .run()
+    database.db
+      .insert(assetVersions)
+      .values({
+        id: assetVersionId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        assetId,
+        version: 1,
+        createdBy: tenant.userId,
+        createdAt: tenant.now,
+      })
+      .run()
+    const derivative = {
+      id: uuidv7(),
+      organizationId: tenant.firstOrganizationId,
+      projectId: tenant.firstProjectId,
+      assetVersionId,
+      cacheKey: '4'.repeat(64),
+      grammarVersion: 1,
+      canonicalSpec: 'w_400,f_avif',
+      outputFormat: 'avif' as const,
+      processorFingerprint: 'sharp@0.35.4/libvips@8.18.6',
+      createdAt: tenant.now,
+      updatedAt: tenant.now,
+    }
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(derivatives)
+          .values({ ...derivative, state: 'generating' })
+          .run(),
+      /CHECK constraint failed: derivatives_lease_consistent/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(derivatives)
+          .values({ ...derivative, id: uuidv7(), cacheKey: '5'.repeat(64), state: 'ready' })
+          .run(),
+      /CHECK constraint failed: derivatives_ready_metadata/,
     )
   })
 })

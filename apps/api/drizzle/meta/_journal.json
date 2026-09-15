@@ -78,6 +78,13 @@
       "when": 1789213313185,
       "tag": "0010_chilly_marvel_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789504021672,
+      "tag": "0011_unique_riptide",
+      "breakpoints": true
     }
   ]
 }

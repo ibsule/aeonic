@@ -260,6 +260,11 @@ export const assetVersions = sqliteTable(
       name: 'asset_versions_storage_object_tenant_fk',
     }).onDelete('restrict'),
     uniqueIndex('asset_versions_asset_version_unique').on(table.assetId, table.version),
+    uniqueIndex('asset_versions_id_tenant_unique').on(
+      table.id,
+      table.organizationId,
+      table.projectId,
+    ),
     index('asset_versions_project_created_idx').on(
       table.organizationId,
       table.projectId,
@@ -277,6 +282,107 @@ export const assetVersions = sqliteTable(
     check(
       'asset_versions_sha256_valid',
       sql`${table.sha256} IS NULL OR (length(${table.sha256}) = 64 AND ${table.sha256} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+  ],
+)
+
+export const derivatives = sqliteTable(
+  'derivatives',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    assetVersionId: text('asset_version_id').notNull(),
+    storageObjectId: text('storage_object_id'),
+    cacheKey: text('cache_key').notNull(),
+    grammarVersion: integer('grammar_version').notNull(),
+    canonicalSpec: text('canonical_spec').notNull(),
+    outputFormat: text('output_format', { enum: ['jpeg', 'png', 'webp', 'avif'] }).notNull(),
+    processorFingerprint: text('processor_fingerprint').notNull(),
+    state: text('state', { enum: ['queued', 'generating', 'ready', 'failed'] })
+      .notNull()
+      .default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    leaseOwner: text('lease_owner'),
+    leaseExpiresAt: integer('lease_expires_at', { mode: 'timestamp_ms' }),
+    sizeBytes: integer('size_bytes'),
+    sha256: text('sha256'),
+    mimeType: text('mime_type'),
+    width: integer('width'),
+    height: integer('height'),
+    errorCode: text('error_code'),
+    createdBy: text('created_by').references(() => authSchema.user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'derivatives_project_organization_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.assetVersionId, table.organizationId, table.projectId],
+      foreignColumns: [assetVersions.id, assetVersions.organizationId, assetVersions.projectId],
+      name: 'derivatives_asset_version_tenant_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.storageObjectId, table.organizationId, table.projectId],
+      foreignColumns: [storageObjects.id, storageObjects.organizationId, storageObjects.projectId],
+      name: 'derivatives_storage_object_tenant_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('derivatives_project_cache_key_unique').on(table.projectId, table.cacheKey),
+    uniqueIndex('derivatives_id_tenant_unique').on(table.id, table.organizationId, table.projectId),
+    index('derivatives_asset_version_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.assetVersionId,
+    ),
+    index('derivatives_generation_lease_idx').on(table.state, table.leaseExpiresAt),
+    check(
+      'derivatives_cache_key_valid',
+      sql`length(${table.cacheKey}) = 64 AND ${table.cacheKey} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check('derivatives_grammar_v1', sql`${table.grammarVersion} = 1`),
+    check(
+      'derivatives_spec_valid',
+      sql`length(${table.canonicalSpec}) BETWEEN 1 AND 256 AND ${table.canonicalSpec} NOT GLOB '*[^a-z0-9_.,]*'`,
+    ),
+    check(
+      'derivatives_output_format_valid',
+      sql`${table.outputFormat} IN ('jpeg', 'png', 'webp', 'avif')`,
+    ),
+    check(
+      'derivatives_state_valid',
+      sql`${table.state} IN ('queued', 'generating', 'ready', 'failed')`,
+    ),
+    check('derivatives_attempts_nonnegative', sql`${table.attempts} >= 0`),
+    check(
+      'derivatives_lease_consistent',
+      sql`(${table.state} = 'generating') = (${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)`,
+    ),
+    check(
+      'derivatives_size_nonnegative',
+      sql`${table.sizeBytes} IS NULL OR ${table.sizeBytes} >= 0`,
+    ),
+    check(
+      'derivatives_sha256_valid',
+      sql`${table.sha256} IS NULL OR (length(${table.sha256}) = 64 AND ${table.sha256} NOT GLOB '*[^0-9a-f]*')`,
+    ),
+    check(
+      'derivatives_dimensions_positive',
+      sql`(${table.width} IS NULL OR ${table.width} > 0) AND (${table.height} IS NULL OR ${table.height} > 0)`,
+    ),
+    check(
+      'derivatives_ready_metadata',
+      sql`${table.state} <> 'ready' OR (${table.storageObjectId} IS NOT NULL AND ${table.sizeBytes} IS NOT NULL AND ${table.sha256} IS NOT NULL AND ${table.mimeType} IS NOT NULL AND ${table.width} IS NOT NULL AND ${table.height} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
+    ),
+    check(
+      'derivatives_terminal_unleased',
+      sql`${table.state} NOT IN ('ready', 'failed') OR (${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL)`,
     ),
   ],
 )
