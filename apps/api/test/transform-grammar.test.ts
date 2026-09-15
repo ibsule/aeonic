@@ -77,6 +77,7 @@ describe('image transform grammar v1', () => {
     assertTransformError('w_8193', 'invalid_operation_value')
     assertTransformError('w_8000,h_8000', 'output_too_large')
     assertTransformError('f_jpeg,q_101', 'invalid_operation_value')
+    assertTransformError('f_png,q_70', 'conflicting_operations')
     assertTransformError('blur_0.2', 'invalid_operation_value')
     assertTransformError('sharpen_10.001', 'invalid_operation_value')
   })

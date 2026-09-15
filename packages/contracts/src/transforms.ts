@@ -346,6 +346,12 @@ export function parseImageTransformV1(specification: string): CanonicalImageTran
       'quality requires an explicit output format.',
     )
   }
+  if (operations.has('q') && format === 'png') {
+    throw new TransformSpecError(
+      'conflicting_operations',
+      'quality is supported only for JPEG, WebP, AVIF, and automatic output.',
+    )
+  }
   if (width !== undefined && height !== undefined && width * height > MAX_OUTPUT_PIXELS) {
     throw new TransformSpecError(
       'output_too_large',
