@@ -151,7 +151,7 @@ function parseOrigins(value: string | undefined, environment: AppConfig['environ
         .filter(Boolean)
     : environment === 'production'
       ? []
-      : ['http://localhost:3000']
+      : ['http://localhost:4173']
 
   for (const origin of origins) {
     let url: URL

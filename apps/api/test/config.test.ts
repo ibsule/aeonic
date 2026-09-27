@@ -9,7 +9,7 @@ describe('configuration', () => {
     assert.equal(config.environment, 'development')
     assert.equal(config.host, '0.0.0.0')
     assert.equal(config.port, 3001)
-    assert.deepEqual(config.corsOrigins, ['http://localhost:3000'])
+    assert.deepEqual(config.corsOrigins, ['http://localhost:4173'])
     assert.equal(config.trustProxy, false)
     assert.equal(config.databasePath, 'data/aeonic.db')
     assert.equal(config.databaseBusyTimeoutMs, 5_000)

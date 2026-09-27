@@ -10,7 +10,35 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "NODE_ENV",
+        "HOST",
+        "PORT",
+        "LOG_LEVEL",
+        "CORS_ORIGINS",
+        "TRUST_PROXY",
+        "REQUEST_TIMEOUT_MS",
+        "SHUTDOWN_TIMEOUT_MS",
+        "MAX_JSON_BODY_BYTES",
+        "DATABASE_*",
+        "STORAGE_BACKEND",
+        "LOCAL_STORAGE_PATH",
+        "S3_*",
+        "UPLOAD_*",
+        "TUS_*",
+        "PROJECT_STORAGE_QUOTA_BYTES",
+        "WORKER_*",
+        "IMAGE_*",
+        "VIDEO_*",
+        "DOCUMENT_*",
+        "DELIVERY_*",
+        "PUBLIC_DELIVERY_CACHE_SECONDS",
+        "BETTER_AUTH_*",
+        "AEONIC_VERSION",
+        "AI_*",
+        "QDRANT_*"
+      ]
     },
     "test": {
       "dependsOn": ["^build"],
