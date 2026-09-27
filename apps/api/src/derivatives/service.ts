@@ -260,7 +260,7 @@ export class ImageDerivativeService {
       id: row.id,
       scope: { organizationId: row.organizationId, projectId: row.projectId },
       canonicalSpec: row.canonicalSpec,
-      outputFormat: row.outputFormat,
+      outputFormat: row.outputFormat as ImageOutputFormat,
       mimeType: row.mimeType,
       sizeBytes: row.sizeBytes,
       sha256: row.sha256,

@@ -435,4 +435,102 @@ describe('database', () => {
       connection.close()
     }
   })
+
+  it('preserves existing image derivatives when adding asynchronous derivative types', () => {
+    const connection = openDatabase({
+      databasePath: createDatabasePath(),
+      databaseBusyTimeoutMs: 5_000,
+      databaseWalAutocheckpointPages: 1_000,
+    })
+
+    try {
+      connection.migrate(migrationSubset(11))
+      const now = new Date()
+      const userId = uuidv7()
+      const organizationId = uuidv7()
+      const projectId = uuidv7()
+      const assetId = uuidv7()
+      const assetVersionId = uuidv7()
+      const derivativeId = uuidv7()
+
+      connection.db
+        .insert(user)
+        .values({ id: userId, name: 'Owner', email: 'derivative-upgrade@example.com' })
+        .run()
+      connection.db
+        .insert(organization)
+        .values({
+          id: organizationId,
+          name: 'Derivative Studio',
+          slug: 'derivative-studio',
+          createdAt: now,
+        })
+        .run()
+      connection.db
+        .insert(projects)
+        .values({
+          id: projectId,
+          organizationId,
+          name: 'Derivative Library',
+          slug: 'derivative-library',
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.db
+        .insert(assets)
+        .values({
+          id: assetId,
+          organizationId,
+          projectId,
+          publicId: 'existing-image',
+          name: 'Existing image',
+          mediaKind: 'image',
+          state: 'processing',
+          currentVersion: 1,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.client
+        .prepare(
+          `insert into asset_versions
+            (id, organization_id, project_id, asset_id, version, state, created_by, created_at)
+           values (?, ?, ?, ?, 1, 'processing', ?, ?)`,
+        )
+        .run(assetVersionId, organizationId, projectId, assetId, userId, now.getTime())
+      connection.client
+        .prepare(
+          `insert into derivatives
+            (id, organization_id, project_id, asset_version_id, cache_key, grammar_version,
+             canonical_spec, output_format, processor_fingerprint, state, created_by, created_at,
+             updated_at)
+           values (?, ?, ?, ?, ?, 1, 'w_640.f_webp', 'webp', 'sharp-test', 'queued', ?, ?, ?)`,
+        )
+        .run(
+          derivativeId,
+          organizationId,
+          projectId,
+          assetVersionId,
+          'a'.repeat(64),
+          userId,
+          now.getTime(),
+          now.getTime(),
+        )
+
+      connection.migrate()
+
+      assert.deepEqual(
+        connection.client
+          .prepare('select kind, duration_ms, output_format from derivatives where id = ?')
+          .get(derivativeId),
+        { kind: 'image', duration_ms: null, output_format: 'webp' },
+      )
+      assert.deepEqual(connection.client.pragma('foreign_key_check'), [])
+    } finally {
+      connection.close()
+    }
+  })
 })

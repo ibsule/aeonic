@@ -85,6 +85,13 @@
       "when": 1789504021672,
       "tag": "0011_unique_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790501424318,
+      "tag": "0012_round_proudstar",
+      "breakpoints": true
     }
   ]
 }

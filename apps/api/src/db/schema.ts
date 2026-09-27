@@ -297,9 +297,23 @@ export const derivatives = sqliteTable(
     assetVersionId: text('asset_version_id').notNull(),
     storageObjectId: text('storage_object_id'),
     cacheKey: text('cache_key').notNull(),
+    kind: text('kind', {
+      enum: [
+        'image',
+        'video_poster',
+        'video_transcode',
+        'pdf_thumbnail',
+        'pdf_text',
+        'office_preview',
+      ],
+    })
+      .notNull()
+      .default('image'),
     grammarVersion: integer('grammar_version').notNull(),
     canonicalSpec: text('canonical_spec').notNull(),
-    outputFormat: text('output_format', { enum: ['jpeg', 'png', 'webp', 'avif'] }).notNull(),
+    outputFormat: text('output_format', {
+      enum: ['jpeg', 'png', 'webp', 'avif', 'mp4', 'webm', 'pdf', 'txt'],
+    }).notNull(),
     processorFingerprint: text('processor_fingerprint').notNull(),
     state: text('state', { enum: ['queued', 'generating', 'ready', 'failed'] })
       .notNull()
@@ -312,6 +326,7 @@ export const derivatives = sqliteTable(
     mimeType: text('mime_type'),
     width: integer('width'),
     height: integer('height'),
+    durationMs: integer('duration_ms'),
     errorCode: text('error_code'),
     createdBy: text('created_by').references(() => authSchema.user.id, { onDelete: 'set null' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -349,11 +364,15 @@ export const derivatives = sqliteTable(
     check('derivatives_grammar_v1', sql`${table.grammarVersion} = 1`),
     check(
       'derivatives_spec_valid',
-      sql`length(${table.canonicalSpec}) BETWEEN 1 AND 256 AND ${table.canonicalSpec} NOT GLOB '*[^a-z0-9_.,]*'`,
+      sql`length(${table.canonicalSpec}) BETWEEN 1 AND 256 AND ${table.canonicalSpec} NOT GLOB '*[^a-z0-9_.,-]*'`,
+    ),
+    check(
+      'derivatives_kind_valid',
+      sql`${table.kind} IN ('image', 'video_poster', 'video_transcode', 'pdf_thumbnail', 'pdf_text', 'office_preview')`,
     ),
     check(
       'derivatives_output_format_valid',
-      sql`${table.outputFormat} IN ('jpeg', 'png', 'webp', 'avif')`,
+      sql`${table.outputFormat} IN ('jpeg', 'png', 'webp', 'avif', 'mp4', 'webm', 'pdf', 'txt')`,
     ),
     check(
       'derivatives_state_valid',
@@ -377,8 +396,12 @@ export const derivatives = sqliteTable(
       sql`(${table.width} IS NULL OR ${table.width} > 0) AND (${table.height} IS NULL OR ${table.height} > 0)`,
     ),
     check(
+      'derivatives_duration_nonnegative',
+      sql`${table.durationMs} IS NULL OR ${table.durationMs} >= 0`,
+    ),
+    check(
       'derivatives_ready_metadata',
-      sql`${table.state} <> 'ready' OR (${table.storageObjectId} IS NOT NULL AND ${table.sizeBytes} IS NOT NULL AND ${table.sha256} IS NOT NULL AND ${table.mimeType} IS NOT NULL AND ${table.width} IS NOT NULL AND ${table.height} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
+      sql`${table.state} <> 'ready' OR (${table.storageObjectId} IS NOT NULL AND ${table.sizeBytes} IS NOT NULL AND ${table.sha256} IS NOT NULL AND ${table.mimeType} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
     check(
       'derivatives_terminal_unleased',
