@@ -49,6 +49,28 @@ export {
 } from './delivery.js'
 export { type ServiceStatus, serviceStatusSchema } from './health.js'
 export {
+  type AiIndex,
+  aiIndexSchema,
+  type AiIndexState,
+  aiIndexStates,
+  type SemanticEvaluation,
+  semanticEvaluationSchema,
+  type SemanticSearchHit,
+  semanticSearchHitSchema,
+  type SemanticSearchReason,
+  semanticSearchReasons,
+  type SemanticSearchResponse,
+  semanticSearchResponseSchema,
+  type SemanticSearchSettings,
+  semanticSearchSettingsSchema,
+  type StartSemanticReindexRequest,
+  startSemanticReindexRequestSchema,
+  type UpdateAssetAiExclusionRequest,
+  updateAssetAiExclusionRequestSchema,
+  type UpdateSemanticSearchSettingsRequest,
+  updateSemanticSearchSettingsRequestSchema,
+} from './semantic-search.js'
+export {
   type Job,
   type JobList,
   jobListSchema,

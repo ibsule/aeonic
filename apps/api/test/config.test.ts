@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { ConfigurationError, loadConfig } from '../src/config.js'
 
@@ -30,6 +33,12 @@ describe('configuration', () => {
     assert.equal(config.deliveryUrlTtlSeconds, 900)
     assert.equal(config.publicDeliveryCacheSeconds, 365 * 24 * 60 * 60)
     assert.equal(config.authBaseUrl, 'http://localhost:3001')
+    assert.equal(config.aiEnabled, false)
+    assert.equal(config.aiProvider, 'openai')
+    assert.equal(config.aiProviderApiKey, undefined)
+    assert.equal(config.aiEmbeddingDimensions, 1_024)
+    assert.equal(config.aiPipelineVersion, 'semantic-v1')
+    assert.equal(config.qdrantUrl, 'http://qdrant:6333')
     assert.equal(config.version, '0.6.0')
   })
 
@@ -136,5 +145,60 @@ describe('configuration', () => {
     assert.equal(config.storageBackend, 's3')
     assert.equal(config.s3Bucket, 'media')
     assert.equal(config.s3ForcePathStyle, true)
+  })
+
+  it('keeps AI optional and validates an explicitly enabled provider', () => {
+    assert.throws(
+      () => loadConfig({ AI_ENABLED: 'true' }),
+      /enabled AI requires provider credentials/,
+    )
+
+    const config = loadConfig({
+      AI_ENABLED: 'true',
+      AI_PROVIDER_API_KEY: 'local-provider-key',
+      AI_VISION_MODEL: 'vision-model-snapshot',
+      AI_EMBEDDING_MODEL: 'embedding-model-snapshot',
+      AI_EMBEDDING_DIMENSIONS: '768',
+      QDRANT_URL: 'http://localhost:6333',
+    })
+
+    assert.equal(config.aiEnabled, true)
+    assert.equal(config.aiProviderApiKey, 'local-provider-key')
+    assert.equal(config.aiVisionModel, 'vision-model-snapshot')
+    assert.equal(config.aiEmbeddingModel, 'embedding-model-snapshot')
+    assert.equal(config.aiEmbeddingDimensions, 768)
+  })
+
+  it('requires secret files for production AI credentials', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'aeonic-ai-config-'))
+    const providerSecret = join(directory, 'provider')
+    const qdrantSecret = join(directory, 'qdrant')
+    writeFileSync(providerSecret, 'provider-secret\n', { mode: 0o600 })
+    writeFileSync(qdrantSecret, 'qdrant-secret\n', { mode: 0o600 })
+    const production = {
+      NODE_ENV: 'production',
+      BETTER_AUTH_SECRET: 'a-secure-production-secret-with-32-characters',
+      BETTER_AUTH_URL: 'https://media.example.com',
+      DELIVERY_SIGNING_KEYS: `primary:${Buffer.alloc(32, 1).toString('base64url')}`,
+      AI_ENABLED: 'true',
+      AI_VISION_MODEL: 'vision-model-snapshot',
+      AI_EMBEDDING_MODEL: 'embedding-model-snapshot',
+    }
+
+    try {
+      assert.throws(
+        () => loadConfig({ ...production, AI_PROVIDER_API_KEY: 'inline-secret' }),
+        /must be provided through AI_PROVIDER_API_KEY_FILE/,
+      )
+      const config = loadConfig({
+        ...production,
+        AI_PROVIDER_API_KEY_FILE: providerSecret,
+        QDRANT_API_KEY_FILE: qdrantSecret,
+      })
+      assert.equal(config.aiProviderApiKey, 'provider-secret')
+      assert.equal(config.qdrantApiKey, 'qdrant-secret')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

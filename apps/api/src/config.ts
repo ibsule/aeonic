@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 
 const environmentSchema = z.object({
@@ -78,6 +79,25 @@ const environmentSchema = z.object({
   PUBLIC_DELIVERY_CACHE_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(31_536_000),
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   BETTER_AUTH_URL: z.url().optional(),
+  AI_ENABLED: z.enum(['true', 'false']).default('false'),
+  AI_PROVIDER: z.enum(['openai']).default('openai'),
+  AI_PROVIDER_BASE_URL: z.url().default('https://api.openai.com/v1'),
+  AI_PROVIDER_API_KEY: z.string().min(1).optional(),
+  AI_PROVIDER_API_KEY_FILE: z.string().trim().min(1).optional(),
+  AI_VISION_MODEL: z.string().trim().min(1).max(128).optional(),
+  AI_EMBEDDING_MODEL: z.string().trim().min(1).max(128).optional(),
+  AI_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).max(65_536).default(1_024),
+  AI_PIPELINE_VERSION: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9._-]{1,64}$/)
+    .default('semantic-v1'),
+  AI_PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  AI_PROVIDER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(100).default(5),
+  AI_PROVIDER_COOLDOWN_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+  QDRANT_URL: z.url().default('http://qdrant:6333'),
+  QDRANT_API_KEY: z.string().min(1).optional(),
+  QDRANT_API_KEY_FILE: z.string().trim().min(1).optional(),
   AEONIC_VERSION: z.string().trim().min(1).default('0.6.0'),
 })
 
@@ -131,6 +151,19 @@ export interface AppConfig {
   readonly publicDeliveryCacheSeconds: number
   readonly authSecret: string
   readonly authBaseUrl: string
+  readonly aiEnabled: boolean
+  readonly aiProvider: 'openai'
+  readonly aiProviderBaseUrl: string
+  readonly aiProviderApiKey?: string
+  readonly aiVisionModel?: string
+  readonly aiEmbeddingModel?: string
+  readonly aiEmbeddingDimensions: number
+  readonly aiPipelineVersion: string
+  readonly aiProviderTimeoutMs: number
+  readonly aiProviderFailureThreshold: number
+  readonly aiProviderCooldownMs: number
+  readonly qdrantUrl: string
+  readonly qdrantApiKey?: string
   readonly version: string
 }
 
@@ -234,6 +267,43 @@ function parseDeliverySigningKeys(
   return keys
 }
 
+function readSecret(
+  name: string,
+  inlineValue: string | undefined,
+  filePath: string | undefined,
+  environment: AppConfig['environment'],
+): string | undefined {
+  if (inlineValue !== undefined && filePath !== undefined) {
+    throw new ConfigurationError(
+      `Invalid configuration: set either ${name} or ${name}_FILE, not both`,
+    )
+  }
+  if (inlineValue !== undefined) {
+    if (environment === 'production') {
+      throw new ConfigurationError(
+        `Invalid configuration: ${name} must be provided through ${name}_FILE in production`,
+      )
+    }
+    return inlineValue
+  }
+  if (filePath === undefined) return undefined
+
+  let value: string
+  try {
+    value = readFileSync(filePath, 'utf8')
+  } catch {
+    throw new ConfigurationError(`Invalid configuration: ${name}_FILE could not be read`)
+  }
+  if (Buffer.byteLength(value) > 16_384) {
+    throw new ConfigurationError(`Invalid configuration: ${name}_FILE is unexpectedly large`)
+  }
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    throw new ConfigurationError(`Invalid configuration: ${name}_FILE is empty`)
+  }
+  return trimmed
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = environmentSchema.safeParse(environment)
 
@@ -273,6 +343,38 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   if (value.WORKER_HEARTBEAT_MS * 2 >= value.WORKER_LEASE_MS) {
     throw new ConfigurationError(
       'Invalid configuration: WORKER_HEARTBEAT_MS must be less than half WORKER_LEASE_MS',
+    )
+  }
+  const aiProviderApiKey = readSecret(
+    'AI_PROVIDER_API_KEY',
+    value.AI_PROVIDER_API_KEY,
+    value.AI_PROVIDER_API_KEY_FILE,
+    value.NODE_ENV,
+  )
+  const qdrantApiKey = readSecret(
+    'QDRANT_API_KEY',
+    value.QDRANT_API_KEY,
+    value.QDRANT_API_KEY_FILE,
+    value.NODE_ENV,
+  )
+  const aiEnabled = value.AI_ENABLED === 'true'
+  if (
+    aiEnabled &&
+    (aiProviderApiKey === undefined ||
+      value.AI_VISION_MODEL === undefined ||
+      value.AI_EMBEDDING_MODEL === undefined)
+  ) {
+    throw new ConfigurationError(
+      'Invalid configuration: enabled AI requires provider credentials, AI_VISION_MODEL, and AI_EMBEDDING_MODEL',
+    )
+  }
+  if (
+    aiEnabled &&
+    value.NODE_ENV === 'production' &&
+    (new URL(value.AI_PROVIDER_BASE_URL).protocol !== 'https:' || qdrantApiKey === undefined)
+  ) {
+    throw new ConfigurationError(
+      'Invalid configuration: production AI requires an HTTPS provider and QDRANT_API_KEY_FILE',
     )
   }
 
@@ -332,6 +434,21 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     publicDeliveryCacheSeconds: value.PUBLIC_DELIVERY_CACHE_SECONDS,
     authSecret,
     authBaseUrl,
+    aiEnabled,
+    aiProvider: value.AI_PROVIDER,
+    aiProviderBaseUrl: value.AI_PROVIDER_BASE_URL.replace(/\/$/, ''),
+    ...(aiProviderApiKey === undefined ? {} : { aiProviderApiKey }),
+    ...(value.AI_VISION_MODEL === undefined ? {} : { aiVisionModel: value.AI_VISION_MODEL }),
+    ...(value.AI_EMBEDDING_MODEL === undefined
+      ? {}
+      : { aiEmbeddingModel: value.AI_EMBEDDING_MODEL }),
+    aiEmbeddingDimensions: value.AI_EMBEDDING_DIMENSIONS,
+    aiPipelineVersion: value.AI_PIPELINE_VERSION,
+    aiProviderTimeoutMs: value.AI_PROVIDER_TIMEOUT_MS,
+    aiProviderFailureThreshold: value.AI_PROVIDER_FAILURE_THRESHOLD,
+    aiProviderCooldownMs: value.AI_PROVIDER_COOLDOWN_MS,
+    qdrantUrl: value.QDRANT_URL.replace(/\/$/, ''),
+    ...(qdrantApiKey === undefined ? {} : { qdrantApiKey }),
     version: value.AEONIC_VERSION,
   })
 }
