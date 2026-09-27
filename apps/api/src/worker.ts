@@ -6,6 +6,7 @@ import { SqliteJobRepository } from './jobs/repository.js'
 import { JobRunner } from './jobs/runner.js'
 import { createAppLogger } from './logging.js'
 import { ImageInspectionHandler } from './media/image-inspection-handler.js'
+import { NonImageInspectionHandler } from './media/non-image-inspection-handler.js'
 import { createStorageRuntime, type StorageRuntime } from './storage/factory.js'
 
 function derivedWorkerId(): string {
@@ -50,10 +51,39 @@ async function start(): Promise<void> {
     maxInputPixels: config.imageMaxInputPixels,
     maxFrames: config.imageMaxFrames,
   })
+  const mediaLimits = {
+    video: {
+      maxInputBytes: config.uploadMaxBytes,
+      maxOutputBytes: config.imageMaxOutputBytes,
+      maxDurationSeconds: config.videoMaxDurationSeconds,
+      maxWidth: config.videoMaxWidth,
+      maxHeight: config.videoMaxHeight,
+      timeoutMs: config.workerJobTimeoutMs,
+    },
+    document: {
+      maxInputBytes: config.uploadMaxBytes,
+      maxOutputBytes: config.imageMaxOutputBytes,
+      maxPages: config.documentMaxPages,
+      maxPagePoints: config.documentMaxPagePoints,
+      maxTextBytes: config.documentMaxTextBytes,
+      timeoutMs: config.workerJobTimeoutMs,
+    },
+  }
+  const videoInspection = new NonImageInspectionHandler('video', database, storage, mediaLimits)
+  const documentInspection = new NonImageInspectionHandler(
+    'document',
+    database,
+    storage,
+    mediaLimits,
+  )
   const workerId = config.workerId ?? derivedWorkerId()
   const runner = new JobRunner(
     new SqliteJobRepository(database),
-    new Map([['media.inspect.image', imageInspection.handle]]),
+    new Map([
+      ['media.inspect.image', imageInspection.handle],
+      ['media.inspect.video', videoInspection.handle],
+      ['media.inspect.document', documentInspection.handle],
+    ]),
     {
       workerId,
       leaseMs: config.workerLeaseMs,
@@ -85,7 +115,7 @@ async function start(): Promise<void> {
   logger.info(
     {
       workerId,
-      handlers: ['media.inspect.image'],
+      handlers: ['media.inspect.image', 'media.inspect.video', 'media.inspect.document'],
       sharp: sharp.versions.sharp,
       libvips: sharp.versions.vips,
     },

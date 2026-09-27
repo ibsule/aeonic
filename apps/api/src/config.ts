@@ -66,6 +66,12 @@ const environmentSchema = z.object({
     .max(1_073_741_824)
     .default(52_428_800),
   IMAGE_TRANSFORM_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(15_000),
+  VIDEO_MAX_DURATION_SECONDS: z.coerce.number().int().min(1).max(86_400).default(7_200),
+  VIDEO_MAX_WIDTH: z.coerce.number().int().min(16).max(16_384).default(7_680),
+  VIDEO_MAX_HEIGHT: z.coerce.number().int().min(16).max(16_384).default(4_320),
+  DOCUMENT_MAX_PAGES: z.coerce.number().int().min(1).max(10_000).default(1_000),
+  DOCUMENT_MAX_PAGE_POINTS: z.coerce.number().int().min(72).max(100_000).default(20_000),
+  DOCUMENT_MAX_TEXT_BYTES: z.coerce.number().int().min(1_024).max(10_485_760).default(1_048_576),
   DELIVERY_BASE_URL: z.url().optional(),
   DELIVERY_SIGNING_KEYS: z.string().optional(),
   DELIVERY_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
@@ -113,6 +119,12 @@ export interface AppConfig {
   readonly imageMaxFrames: number
   readonly imageMaxOutputBytes: number
   readonly imageTransformTimeoutMs: number
+  readonly videoMaxDurationSeconds: number
+  readonly videoMaxWidth: number
+  readonly videoMaxHeight: number
+  readonly documentMaxPages: number
+  readonly documentMaxPagePoints: number
+  readonly documentMaxTextBytes: number
   readonly deliveryBaseUrl: string
   readonly deliverySigningKeys: readonly DeliverySigningKey[]
   readonly deliveryUrlTtlSeconds: number
@@ -304,6 +316,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     imageMaxFrames: value.IMAGE_MAX_FRAMES,
     imageMaxOutputBytes: value.IMAGE_MAX_OUTPUT_BYTES,
     imageTransformTimeoutMs: value.IMAGE_TRANSFORM_TIMEOUT_MS,
+    videoMaxDurationSeconds: value.VIDEO_MAX_DURATION_SECONDS,
+    videoMaxWidth: value.VIDEO_MAX_WIDTH,
+    videoMaxHeight: value.VIDEO_MAX_HEIGHT,
+    documentMaxPages: value.DOCUMENT_MAX_PAGES,
+    documentMaxPagePoints: value.DOCUMENT_MAX_PAGE_POINTS,
+    documentMaxTextBytes: value.DOCUMENT_MAX_TEXT_BYTES,
     deliveryBaseUrl,
     deliverySigningKeys: Object.freeze(
       parseDeliverySigningKeys(value.DELIVERY_SIGNING_KEYS, value.NODE_ENV).map((key) =>
