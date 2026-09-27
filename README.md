@@ -6,9 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.4* provides the trustworthy API foundation, identity/control plane, and Phase 3 storage,
-ingestion, and original delivery. It currently
-ships:
+*Version 0.5* provides the trustworthy API foundation, identity/control plane, storage and
+delivery, plus deterministic bounded media processing. It currently ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -29,22 +28,30 @@ ships:
   termination, durable offsets, and restart reconciliation.
 - Immutable original-asset delivery over local or S3-compatible storage, including authenticated
   reads, expiring signed URLs, conditional requests, and single byte ranges.
-- Project-scoped storage usage, quota, health, and sanitized failure diagnostics.
-- A standalone crash-safe worker that performs bounded image inspection and records decoder
-  metadata before making an image ready.
+- Project-scoped storage usage, quota, health, derivative-cache, and sanitized failure diagnostics.
+- A standalone crash-safe worker that performs bounded image, video, PDF, and Office inspection
+  before making an asset ready.
 - A versioned, canonical image-transform grammar and an audited API for immutable named preset
   versions.
+- Synchronous image transformation URLs with deterministic cache identities, single-flight
+  generation, content negotiation, immutable validators, and signed private delivery.
+- Durable asynchronous video posters, bounded clips and MP4/WebM transcodes, PDF thumbnails and
+  text extraction, and Office-to-PDF previews.
+- Tenant-scoped derivative status, authenticated delivery, explicit cache invalidation, retry-safe
+  leases, processor versioning, and audited lifecycle events.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
 
-Video/document inspection, derivative generation and delivery, the dashboard, Docker Compose, and
-AI features are **not implemented yet**. Run the media worker to inspect accepted images; video and
-document uploads remain in `processing` until their Phase 4 handlers are implemented. Only ready
-versions can be delivered.
+The dashboard, Docker Compose packaging, and AI features are **not implemented yet**. The API and
+worker must both be running for uploads to become ready and for queued video/document derivatives
+to complete. AI is not required for any current upload, processing, or delivery workflow.
 
 ## Requirements
 
 - Node.js 24 LTS
 - pnpm 11.25.0 through Corepack
+- FFmpeg and ffprobe
+- Poppler utilities (`pdfinfo`, `pdftotext`, and `pdftoppm`)
+- LibreOffice for Office document previews
 
 ## Development
 
@@ -125,6 +132,17 @@ The response URL is a bearer capability: keep its full query string private and 
 Signed URLs expire after 15 minutes by default. Documents are always served as attachments; images
 and videos default to inline. Delivery supports `GET`, `HEAD`, validators, and one RFC byte range.
 Use the interactive API reference for the authenticated and canonical URL shapes.
+
+Ready video and document versions accept asynchronous derivative requests at:
+
+```text
+/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/assets/PUBLIC_ID/versions/1/derivatives
+```
+
+The response is immediately reusable as the status resource. Requests with the same source digest,
+canonical operation, output format, and processor revision share one cache identity. Completed
+content is available through the authenticated `contentPath` in the response; deleting the status
+resource explicitly invalidates its cached output.
 
 Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
 provided by your shell or process supervisor; automatic `.env` file loading is not currently part
