@@ -28,6 +28,7 @@ import { createOriginalDeliveryPath, DeliverySigner } from './signing.js'
 export interface OriginalAsset {
   scope: TenantScope
   assetId: string
+  versionId: string
   publicId: string
   version: number
   visibility: 'private' | 'public'
@@ -89,6 +90,7 @@ export class DeliveryService {
           organizationId: string
           projectId: string
           assetId: string
+          versionId: string
           publicId: string
           version: number
           visibility: 'private' | 'public'
@@ -115,6 +117,7 @@ export class DeliveryService {
     return {
       scope: { organizationId: row.organizationId, projectId: row.projectId },
       assetId: row.assetId,
+      versionId: row.versionId,
       publicId: row.publicId,
       version: row.version,
       visibility: row.visibility,
@@ -135,6 +138,7 @@ export class DeliveryService {
         organizationId: assets.organizationId,
         projectId: assets.projectId,
         assetId: assets.id,
+        versionId: assetVersions.id,
         publicId: assets.publicId,
         version: assetVersions.version,
         visibility: assets.visibility,

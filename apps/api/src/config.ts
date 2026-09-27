@@ -59,6 +59,13 @@ const environmentSchema = z.object({
     .max(500_000_000)
     .default(100_000_000),
   IMAGE_MAX_FRAMES: z.coerce.number().int().min(1).max(1_000).default(100),
+  IMAGE_MAX_OUTPUT_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_048_576)
+    .max(1_073_741_824)
+    .default(52_428_800),
+  IMAGE_TRANSFORM_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(15_000),
   DELIVERY_BASE_URL: z.url().optional(),
   DELIVERY_SIGNING_KEYS: z.string().optional(),
   DELIVERY_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
@@ -104,6 +111,8 @@ export interface AppConfig {
   readonly workerJobTimeoutMs: number
   readonly imageMaxInputPixels: number
   readonly imageMaxFrames: number
+  readonly imageMaxOutputBytes: number
+  readonly imageTransformTimeoutMs: number
   readonly deliveryBaseUrl: string
   readonly deliverySigningKeys: readonly DeliverySigningKey[]
   readonly deliveryUrlTtlSeconds: number
@@ -293,6 +302,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     workerJobTimeoutMs: value.WORKER_JOB_TIMEOUT_MS,
     imageMaxInputPixels: value.IMAGE_MAX_INPUT_PIXELS,
     imageMaxFrames: value.IMAGE_MAX_FRAMES,
+    imageMaxOutputBytes: value.IMAGE_MAX_OUTPUT_BYTES,
+    imageTransformTimeoutMs: value.IMAGE_TRANSFORM_TIMEOUT_MS,
     deliveryBaseUrl,
     deliverySigningKeys: Object.freeze(
       parseDeliverySigningKeys(value.DELIVERY_SIGNING_KEYS, value.NODE_ENV).map((key) =>

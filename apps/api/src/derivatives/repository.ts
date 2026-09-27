@@ -150,6 +150,7 @@ export class SqliteDerivativeRepository {
         }
         if (
           current.state !== 'queued' &&
+          current.state !== 'failed' &&
           !(
             current.state === 'generating' &&
             current.leaseExpiresAt &&
