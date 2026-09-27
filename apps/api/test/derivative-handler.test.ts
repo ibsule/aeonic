@@ -14,6 +14,7 @@ import {
   assets,
   assetVersions,
   derivatives,
+  jobs,
   member,
   organization,
   projects,
@@ -21,6 +22,7 @@ import {
   user,
 } from '../src/db/schema.js'
 import { AsyncDerivativeService } from '../src/derivatives/async-service.js'
+import { SqliteDerivativeRepository } from '../src/derivatives/repository.js'
 import { SqliteJobRepository } from '../src/jobs/repository.js'
 import { JobRunner } from '../src/jobs/runner.js'
 import { MediaDerivativeHandler } from '../src/media/derivative-handler.js'
@@ -345,5 +347,61 @@ describe('media derivative worker', () => {
     const preview = await process(test, { operation: 'office_preview' })
     assert.equal(preview.row?.mimeType, 'application/pdf')
     assert.equal(preview.content.subarray(0, 5).toString(), '%PDF-')
+  })
+
+  it('reclaims the same derivative safely after a worker lease expires', async () => {
+    const test = await fixture('document', 'application/pdf', pdfFixture())
+    const requested = test.service.create(
+      test.principal,
+      test.scope,
+      test.publicId,
+      1,
+      { operation: 'pdf_text' },
+      uuidv7(),
+    )
+    const derivative = test.database.db
+      .select()
+      .from(derivatives)
+      .where(eq(derivatives.id, requested.id))
+      .get()
+    const job = test.database.db.select().from(jobs).get()
+    assert.ok(derivative)
+    assert.ok(job)
+    const crashedAt = new Date(Date.now() - 60_000)
+    new SqliteDerivativeRepository(test.database).acquire(
+      {
+        ...test.scope,
+        assetVersionId: derivative.assetVersionId,
+        kind: derivative.kind,
+        cacheKey: derivative.cacheKey,
+        canonicalSpec: derivative.canonicalSpec,
+        outputFormat: derivative.outputFormat,
+        processorFingerprint: derivative.processorFingerprint,
+      },
+      `job:${job.id}`,
+      crashedAt,
+      new Date(Date.now() + 60_000),
+    )
+    test.database.client
+      .prepare(
+        `update jobs set state = 'running', attempts = 1, lease_owner = 'worker:crashed',
+         lease_expires_at = ?, updated_at = ? where id = ?`,
+      )
+      .run(Date.now() - 1, Date.now() - 1, job.id)
+
+    assert.equal(await test.runner.runOnce(new AbortController().signal), 'succeeded')
+    assert.equal(
+      test.database.db.select().from(derivatives).where(eq(derivatives.id, requested.id)).get()
+        ?.state,
+      'ready',
+    )
+    assert.deepEqual(
+      test.database.db
+        .select({ state: jobs.state, attempts: jobs.attempts })
+        .from(jobs)
+        .where(eq(jobs.id, job.id))
+        .get(),
+      { state: 'succeeded', attempts: 2 },
+    )
   })
 })

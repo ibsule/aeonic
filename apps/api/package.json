@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bench:transform": "tsx bench/image-transform.ts",
     "build": "pnpm clean && tsc -b",
     "clean": "node ../../scripts/clean-package.mjs",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
@@ -15,7 +16,7 @@
     "start:worker": "node --enable-source-maps dist/worker.js",
     "test": "node --import tsx --test test/*.test.ts",
     "test:s3": "node --import tsx --test test/*s3*.integration.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.bench.json --noEmit"
   },
   "dependencies": {
     "@aeonic/contracts": "workspace:*",

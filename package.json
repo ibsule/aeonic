@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bench:transform": "pnpm --filter @aeonic/api bench:transform",
     "build": "turbo run build",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "clean": "turbo run clean",

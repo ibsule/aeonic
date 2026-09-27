@@ -143,6 +143,7 @@ of the runtime.
 | `pnpm --filter @aeonic/api db:generate` | Generate a reviewed migration after schema changes |
 | `pnpm test` | Run the test suite |
 | `pnpm --filter @aeonic/api test:s3` | Run the opt-in live S3 compatibility contract |
+| `pnpm bench:transform` | Benchmark the deterministic 12-megapixel image transform fixture |
 | `pnpm typecheck` | Run strict TypeScript checks |
 | `pnpm lint` | Run static analysis |
 | `pnpm format:check` | Verify formatting |
