@@ -25,7 +25,16 @@ export const projectStorageOverviewSchema = {
   $defs: { StorageFailureSummary: storageFailureSummaryBody },
   type: 'object',
   additionalProperties: false,
-  required: ['backend', 'health', 'usage', 'objects', 'uploads', 'failures', 'checkedAt'],
+  required: [
+    'backend',
+    'health',
+    'usage',
+    'objects',
+    'uploads',
+    'derivatives',
+    'failures',
+    'checkedAt',
+  ],
   properties: {
     backend: { type: 'string', enum: ['local', 's3'] },
     health: {
@@ -83,6 +92,18 @@ export const projectStorageOverviewSchema = {
         expired: { type: 'integer', minimum: 0 },
       },
     },
+    derivatives: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['queued', 'generating', 'ready', 'failed', 'readyBytes'],
+      properties: {
+        queued: { type: 'integer', minimum: 0 },
+        generating: { type: 'integer', minimum: 0 },
+        ready: { type: 'integer', minimum: 0 },
+        failed: { type: 'integer', minimum: 0 },
+        readyBytes: { type: 'integer', minimum: 0 },
+      },
+    },
     failures: { type: 'array', items: { $ref: '#/$defs/StorageFailureSummary' } },
     checkedAt: { type: 'string', format: 'date-time' },
   },
@@ -103,6 +124,13 @@ export interface ProjectStorageOverview {
   }
   objects: { available: number; staging: number; failed: number }
   uploads: { active: number; failed: number; rejected: number; expired: number }
+  derivatives: {
+    queued: number
+    generating: number
+    ready: number
+    failed: number
+    readyBytes: number
+  }
   failures: StorageFailureSummary[]
   checkedAt: string
 }

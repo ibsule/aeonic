@@ -311,6 +311,29 @@ describe('media derivative worker', () => {
     const text = await process(textTest, { operation: 'pdf_text' })
     assert.equal(text.row?.mimeType, 'text/plain; charset=utf-8')
     assert.match(text.content.toString('utf8'), /Hello Aeonic/)
+
+    await textTest.service.invalidate(
+      textTest.principal,
+      textTest.scope,
+      text.row?.id as string,
+      uuidv7(),
+    )
+    assert.equal(
+      textTest.database.db
+        .select()
+        .from(derivatives)
+        .where(eq(derivatives.id, text.row?.id as string))
+        .get(),
+      undefined,
+    )
+    assert.equal(
+      textTest.database.db
+        .select()
+        .from(storageObjects)
+        .where(eq(storageObjects.id, text.row?.storageObjectId as string))
+        .get()?.state,
+      'deleted',
+    )
   })
 
   it('creates a PDF preview for an Office document', async () => {

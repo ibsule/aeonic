@@ -16,7 +16,7 @@ import { ApiError } from '../http/api-error.js'
 import type { Principal } from '../http/authentication.js'
 import type { ProjectService } from '../projects/service.js'
 import type { TenantScope } from '../repositories/types.js'
-import type { StorageObjectKey } from '../storage/contracts.js'
+import { StorageError, type StorageObjectKey } from '../storage/contracts.js'
 import type { StorageRuntime } from '../storage/factory.js'
 import { createAsyncDerivativeCacheKey } from './cache-key.js'
 import type { DerivativeOutputFormat, DerivativeRecord } from './repository.js'
@@ -276,6 +276,110 @@ export class AsyncDerivativeService {
     }
   }
 
+  async invalidate(
+    principal: Principal,
+    scope: TenantScope,
+    derivativeId: string,
+    requestId: string,
+  ): Promise<void> {
+    this.authorize(principal, scope, 'update')
+    const now = new Date()
+    const prepared = this.database.client
+      .transaction(() => {
+        const record = this.requireAnyRecord(scope, derivativeId)
+        if (record.state === 'generating') {
+          throw new ApiError(
+            409,
+            'Derivative is active',
+            'derivative_active',
+            'An active derivative cannot be invalidated until its lease expires.',
+          )
+        }
+        this.database.client
+          .prepare(
+            `update jobs
+                set state = 'cancelled', completed_at = ?, updated_at = ?
+              where organization_id = ? and project_id = ? and type = 'media.derive'
+                and state = 'queued' and json_extract(payload, '$.derivativeId') = ?`,
+          )
+          .run(now.getTime(), now.getTime(), scope.organizationId, scope.projectId, derivativeId)
+        if (!record.storageObjectId) return { record, storage: null }
+        const storage = this.database.db
+          .select()
+          .from(storageObjects)
+          .where(
+            and(
+              eq(storageObjects.id, record.storageObjectId),
+              eq(storageObjects.organizationId, scope.organizationId),
+              eq(storageObjects.projectId, scope.projectId),
+            ),
+          )
+          .get()
+        if (!storage) throw derivativeNotFound()
+        this.database.db
+          .update(storageObjects)
+          .set({ state: 'deleting', updatedAt: now })
+          .where(eq(storageObjects.id, storage.id))
+          .run()
+        return { record, storage }
+      })
+      .immediate()
+
+    if (prepared.storage) {
+      if (prepared.storage.backend !== this.storage.backend) {
+        this.restoreInvalidationFailure(prepared.record.id, prepared.storage.id)
+        throw new ApiError(
+          503,
+          'Derivative unavailable',
+          'storage_backend_unavailable',
+          'The derivative storage backend is unavailable.',
+        )
+      }
+      try {
+        await this.storage.port.delete(scope, prepared.storage.objectKey as StorageObjectKey)
+      } catch (error) {
+        if (!(error instanceof StorageError && error.code === 'not_found')) {
+          this.restoreInvalidationFailure(prepared.record.id, prepared.storage.id)
+          throw new ApiError(
+            503,
+            'Invalidation failed',
+            'derivative_invalidation_failed',
+            'The derivative could not be removed from storage.',
+          )
+        }
+      }
+    }
+
+    this.database.db.transaction((transaction) => {
+      transaction.delete(derivatives).where(eq(derivatives.id, derivativeId)).run()
+      if (prepared.storage) {
+        transaction
+          .update(storageObjects)
+          .set({ state: 'deleted', deletedAt: now, updatedAt: now, errorCode: null })
+          .where(eq(storageObjects.id, prepared.storage.id))
+          .run()
+      }
+      transaction
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          ...scope,
+          actorType: principal.type,
+          actorId: principal.type === 'user' ? principal.userId : principal.keyId,
+          action: 'derivative.invalidated',
+          targetType: 'derivative',
+          targetId: derivativeId,
+          requestId,
+          summary: {
+            kind: prepared.record.kind,
+            canonicalSpec: prepared.record.canonicalSpec,
+          },
+          createdAt: now,
+        })
+        .run()
+    })
+  }
+
   private authorize(
     principal: Principal,
     scope: TenantScope,
@@ -367,6 +471,38 @@ export class AsyncDerivativeService {
       .get()
     if (!record) throw derivativeNotFound()
     return record
+  }
+
+  private requireAnyRecord(scope: TenantScope, id: string): DerivativeRecord {
+    const record = this.database.db
+      .select()
+      .from(derivatives)
+      .where(
+        and(
+          eq(derivatives.id, id),
+          eq(derivatives.organizationId, scope.organizationId),
+          eq(derivatives.projectId, scope.projectId),
+        ),
+      )
+      .get()
+    if (!record) throw derivativeNotFound()
+    return record
+  }
+
+  private restoreInvalidationFailure(derivativeId: string, storageObjectId: string): void {
+    const now = new Date()
+    this.database.db.transaction((transaction) => {
+      transaction
+        .update(storageObjects)
+        .set({ state: 'failed', errorCode: 'derivative_invalidation_failed', updatedAt: now })
+        .where(eq(storageObjects.id, storageObjectId))
+        .run()
+      transaction
+        .update(derivatives)
+        .set({ state: 'failed', errorCode: 'derivative_invalidation_failed', updatedAt: now })
+        .where(eq(derivatives.id, derivativeId))
+        .run()
+    })
   }
 
   private toContract(record: DerivativeRecord): Derivative {

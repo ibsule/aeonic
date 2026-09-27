@@ -190,6 +190,24 @@ describe('asynchronous derivative service', () => {
       ApiError,
     )
   })
+
+  it('cancels queued work when a derivative is invalidated', async () => {
+    const test = await fixture('document', 'application/pdf')
+    const principal = { type: 'user' as const, userId: test.userId, sessionId: uuidv7() }
+    const derivative = test.service.create(
+      principal,
+      test.scope,
+      test.publicId,
+      1,
+      { operation: 'pdf_text' },
+      'request-1',
+    )
+
+    await test.service.invalidate(principal, test.scope, derivative.id, 'request-2')
+
+    assert.throws(() => test.service.get(principal, test.scope, derivative.id), ApiError)
+    assert.equal(test.database.db.select().from(jobs).get()?.state, 'cancelled')
+  })
 })
 
 describe('asynchronous derivative plans', () => {

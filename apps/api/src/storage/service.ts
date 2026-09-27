@@ -1,7 +1,7 @@
 import type { ProjectStorageOverview, StorageFailureSummary } from '@aeonic/contracts'
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { DatabaseConnection } from '../db/database.js'
-import { projectApiKeys, storageObjects, uploads } from '../db/schema.js'
+import { derivatives, projectApiKeys, storageObjects, uploads } from '../db/schema.js'
 import { ApiError } from '../http/api-error.js'
 import type { Principal } from '../http/authentication.js'
 import type { ProjectService } from '../projects/service.js'
@@ -19,6 +19,14 @@ interface UploadCounts {
   failed: number
   rejected: number
   expired: number
+}
+
+interface DerivativeCounts {
+  queued: number
+  generating: number
+  ready: number
+  failed: number
+  readyBytes: number
 }
 
 function number(value: number | null | undefined): number {
@@ -85,6 +93,22 @@ export class StorageService {
         and(
           eq(uploads.organizationId, scope.organizationId),
           eq(uploads.projectId, scope.projectId),
+        ),
+      )
+      .get()
+    const derivativeSummary = this.database.db
+      .select({
+        queued: sql<number>`sum(case when ${derivatives.state} = 'queued' then 1 else 0 end)`,
+        generating: sql<number>`sum(case when ${derivatives.state} = 'generating' then 1 else 0 end)`,
+        ready: sql<number>`sum(case when ${derivatives.state} = 'ready' then 1 else 0 end)`,
+        failed: sql<number>`sum(case when ${derivatives.state} = 'failed' then 1 else 0 end)`,
+        readyBytes: sql<number>`coalesce(sum(case when ${derivatives.state} = 'ready' then ${derivatives.sizeBytes} else 0 end), 0)`,
+      })
+      .from(derivatives)
+      .where(
+        and(
+          eq(derivatives.organizationId, scope.organizationId),
+          eq(derivatives.projectId, scope.projectId),
         ),
       )
       .get()
@@ -159,6 +183,13 @@ export class StorageService {
         failed: number((uploadSummary as UploadCounts | undefined)?.failed),
         rejected: number((uploadSummary as UploadCounts | undefined)?.rejected),
         expired: number((uploadSummary as UploadCounts | undefined)?.expired),
+      },
+      derivatives: {
+        queued: number((derivativeSummary as DerivativeCounts | undefined)?.queued),
+        generating: number((derivativeSummary as DerivativeCounts | undefined)?.generating),
+        ready: number((derivativeSummary as DerivativeCounts | undefined)?.ready),
+        failed: number((derivativeSummary as DerivativeCounts | undefined)?.failed),
+        readyBytes: number((derivativeSummary as DerivativeCounts | undefined)?.readyBytes),
       },
       failures,
       checkedAt: new Date().toISOString(),

@@ -97,6 +97,19 @@ export function createDerivativesRouter(
     return sendJson(response, 200, derivativeSchema, result)
   })
 
+  router.delete(derivativeItem, write, async (request, response) => {
+    await service.invalidate(
+      principal(request),
+      {
+        organizationId: uuidParameter(request, 'organizationId'),
+        projectId: uuidParameter(request, 'projectId'),
+      },
+      uuidParameter(request, 'derivativeId'),
+      String(request.id),
+    )
+    response.status(204).end()
+  })
+
   const content = async (request: Request, response: Response): Promise<void> => {
     const controller = new AbortController()
     response.once('close', () => {

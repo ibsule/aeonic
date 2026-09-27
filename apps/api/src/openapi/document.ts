@@ -928,6 +928,20 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           ],
           responses: { '200': jsonResponse('Derivative status.', 'Derivative'), ...standardErrors },
         },
+        delete: {
+          operationId: 'invalidateDerivative',
+          tags: ['Derivatives'],
+          summary: 'Invalidate and remove a cached derivative',
+          description:
+            'Cancels queued work and removes completed bytes. Active leased work must finish or expire first.',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('DerivativeId'),
+          ],
+          responses: { '204': { description: 'Derivative invalidated.' }, ...standardErrors },
+        },
       },
       [derivativeContentPath]: {
         get: {

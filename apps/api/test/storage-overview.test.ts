@@ -111,6 +111,13 @@ describe('project storage overview', () => {
     assert.equal(overview.body.usage.quotaRemainingBytes, 1024 * 1024 - png.byteLength * 3)
     assert.deepEqual(overview.body.objects, { available: 1, staging: 1, failed: 0 })
     assert.deepEqual(overview.body.uploads, { active: 1, failed: 0, rejected: 0, expired: 0 })
+    assert.deepEqual(overview.body.derivatives, {
+      queued: 0,
+      generating: 0,
+      ready: 0,
+      failed: 0,
+      readyBytes: 0,
+    })
     assert.deepEqual(overview.body.failures, [])
   })
 
