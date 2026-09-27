@@ -6,6 +6,7 @@ import { SqliteJobRepository } from './jobs/repository.js'
 import { JobRunner } from './jobs/runner.js'
 import { createAppLogger } from './logging.js'
 import { ImageInspectionHandler } from './media/image-inspection-handler.js'
+import { MediaDerivativeHandler } from './media/derivative-handler.js'
 import { NonImageInspectionHandler } from './media/non-image-inspection-handler.js'
 import { createStorageRuntime, type StorageRuntime } from './storage/factory.js'
 
@@ -76,6 +77,7 @@ async function start(): Promise<void> {
     storage,
     mediaLimits,
   )
+  const mediaDerivatives = new MediaDerivativeHandler(database, storage, config)
   const workerId = config.workerId ?? derivedWorkerId()
   const runner = new JobRunner(
     new SqliteJobRepository(database),
@@ -83,6 +85,7 @@ async function start(): Promise<void> {
       ['media.inspect.image', imageInspection.handle],
       ['media.inspect.video', videoInspection.handle],
       ['media.inspect.document', documentInspection.handle],
+      ['media.derive', mediaDerivatives.handle],
     ]),
     {
       workerId,
@@ -115,7 +118,12 @@ async function start(): Promise<void> {
   logger.info(
     {
       workerId,
-      handlers: ['media.inspect.image', 'media.inspect.video', 'media.inspect.document'],
+      handlers: [
+        'media.inspect.image',
+        'media.inspect.video',
+        'media.inspect.document',
+        'media.derive',
+      ],
       sharp: sharp.versions.sharp,
       libvips: sharp.versions.vips,
     },

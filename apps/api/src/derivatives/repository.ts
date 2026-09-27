@@ -157,6 +157,19 @@ export class SqliteDerivativeRepository {
             'A cache key resolved to different derivative inputs.',
           )
         }
+        if (current.state === 'generating' && current.leaseOwner === owner) {
+          this.database.client
+            .prepare('update derivatives set lease_expires_at = ?, updated_at = ? where id = ?')
+            .run(leaseUntil.getTime(), now.getTime(), current.id)
+          return {
+            derivative: this.database.db
+              .select()
+              .from(derivatives)
+              .where(eq(derivatives.id, current.id))
+              .get() as DerivativeRecord,
+            acquired: true,
+          }
+        }
         if (
           current.state !== 'queued' &&
           current.state !== 'failed' &&
