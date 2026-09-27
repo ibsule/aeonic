@@ -808,6 +808,12 @@ h2 {
   background: #f4e7d4;
   border: 1px solid #ead4b5;
 }
+
+.success-notice {
+  color: #285c45;
+  background: #e4f2e9;
+  border: 1px solid #bddcc9;
+}
 .page-header {
   display: flex;
   justify-content: space-between;

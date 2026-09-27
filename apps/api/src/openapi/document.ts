@@ -1,5 +1,7 @@
 import {
   apiKeyListSchema,
+  assetListSchema,
+  assetSchema,
   assignProjectMemberRequestSchema,
   auditEventListSchema,
   createApiKeyRequestSchema,
@@ -11,6 +13,8 @@ import {
   createTransformPresetVersionRequestSchema,
   deliveryUrlSchema,
   derivativeSchema,
+  jobListSchema,
+  jobSchema,
   problemDetailsSchema,
   projectListSchema,
   projectMemberListSchema,
@@ -25,6 +29,7 @@ import {
   storageFailureSummarySchema,
   transformPresetListSchema,
   transformPresetSchema,
+  updateAssetRequestSchema,
   updateProjectRequestSchema,
   uploadQuerySchema,
 } from '@aeonic/contracts'
@@ -135,7 +140,11 @@ const projectItemPath = '/api/v1/organizations/{organizationId}/projects/{projec
 const memberCollectionPath = `${projectItemPath}/members`
 const apiKeyCollectionPath = `${projectItemPath}/api-keys`
 const uploadCollectionPath = `${projectItemPath}/uploads`
+const assetCollectionPath = `${projectItemPath}/assets`
+const assetItemPath = `${assetCollectionPath}/{publicId}`
 const assetVersionPath = `${projectItemPath}/assets/{publicId}/versions/{version}`
+const jobCollectionPath = `${projectItemPath}/jobs`
+const jobItemPath = `${jobCollectionPath}/{jobId}`
 const deliveryUrlPath = `${assetVersionPath}/delivery-url`
 const authenticatedOriginalPath = `${assetVersionPath}/original`
 const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filename}'
@@ -183,6 +192,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       { name: 'API keys', description: 'Project-scoped machine credentials.' },
       { name: 'Audit', description: 'Administrator-only audit history.' },
       { name: 'Uploads', description: 'Bounded, tenant-isolated media ingestion.' },
+      { name: 'Assets', description: 'Searchable media catalog and asset metadata.' },
+      { name: 'Jobs', description: 'Project-scoped background work and failure status.' },
       { name: 'Resumable uploads', description: 'Authenticated tus 1.0 media ingestion.' },
       { name: 'Storage', description: 'Project usage, quota, and backend diagnostics.' },
       { name: 'Delivery', description: 'Authorized original-asset streaming and sharing.' },
@@ -527,6 +538,121 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
             '415': response('Problem'),
             '422': response('Problem'),
             '503': response('Problem'),
+          },
+        },
+      },
+      [assetCollectionPath]: {
+        get: {
+          operationId: 'listAssets',
+          tags: ['Assets'],
+          summary: 'Search and filter project assets',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            { name: 'query', in: 'query', schema: { type: 'string', minLength: 1 } },
+            {
+              name: 'mediaKind',
+              in: 'query',
+              schema: { type: 'string', enum: ['image', 'video', 'document'] },
+            },
+            {
+              name: 'state',
+              in: 'query',
+              schema: assetSchema.properties.state,
+            },
+            {
+              name: 'visibility',
+              in: 'query',
+              schema: assetSchema.properties.visibility,
+            },
+            { name: 'cursor', in: 'query', schema: { type: 'string', minLength: 1 } },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+            },
+          ],
+          responses: {
+            '200': jsonResponse('Matching project assets.', 'AssetList'),
+            ...standardErrors,
+          },
+        },
+      },
+      [assetItemPath]: {
+        get: {
+          operationId: 'getAsset',
+          tags: ['Assets'],
+          summary: 'Get current asset metadata',
+          security: projectReadSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId'), parameter('PublicId')],
+          responses: {
+            '200': jsonResponse('Current asset metadata.', 'Asset', etagHeader),
+            ...standardErrors,
+          },
+        },
+        patch: {
+          operationId: 'updateAsset',
+          tags: ['Assets'],
+          summary: 'Update asset metadata or privacy',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('IfMatch'),
+          ],
+          requestBody: jsonBody('UpdateAssetRequest'),
+          responses: {
+            '200': jsonResponse('Updated asset metadata.', 'Asset', etagHeader),
+            ...standardErrors,
+            '412': response('Problem'),
+            '428': response('Problem'),
+          },
+        },
+      },
+      [jobCollectionPath]: {
+        get: {
+          operationId: 'listJobs',
+          tags: ['Jobs'],
+          summary: 'List background work and its progress',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            { name: 'state', in: 'query', schema: jobSchema.properties.state },
+            { name: 'cursor', in: 'query', schema: { type: 'string', minLength: 1 } },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+            },
+          ],
+          responses: {
+            '200': jsonResponse('Project jobs ordered newest first.', 'JobList'),
+            ...standardErrors,
+          },
+        },
+      },
+      [jobItemPath]: {
+        get: {
+          operationId: 'getJob',
+          tags: ['Jobs'],
+          summary: 'Get one background job',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            {
+              name: 'jobId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': jsonResponse('Current job status.', 'Job'),
+            ...standardErrors,
           },
         },
       },
@@ -1251,6 +1377,11 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         AuditEventList: component(auditEventListSchema),
         UploadQuery: component(uploadQuerySchema),
         SimpleUploadResult: component(simpleUploadResultSchema),
+        Asset: assetSchema,
+        AssetList: component(assetListSchema),
+        UpdateAssetRequest: component(updateAssetRequestSchema),
+        Job: jobSchema,
+        JobList: component(jobListSchema),
         CreateDerivativeRequest: component(createDerivativeRequestSchema),
         Derivative: component(derivativeSchema),
         CreateDeliveryUrlRequest: component(createDeliveryUrlRequestSchema),

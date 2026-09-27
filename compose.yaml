@@ -19,6 +19,8 @@ x-runtime: &runtime
     TUS_STORAGE_PATH: /app/data/tus
     BETTER_AUTH_URL: ${AEONIC_ORIGIN:-https://localhost}
     DELIVERY_BASE_URL: ${AEONIC_ORIGIN:-https://localhost}
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+    DELIVERY_SIGNING_KEYS: ${DELIVERY_SIGNING_KEYS:-}
     AEONIC_VERSION: 0.6.0
   volumes:
     - aeonic-data:/app/data
@@ -83,6 +85,8 @@ services:
       TUS_STORAGE_PATH: /app/data/tus
       BETTER_AUTH_URL: ${AEONIC_ORIGIN:-https://localhost}
       DELIVERY_BASE_URL: ${AEONIC_ORIGIN:-https://localhost}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      DELIVERY_SIGNING_KEYS: ${DELIVERY_SIGNING_KEYS:-}
       AEONIC_VERSION: 0.6.0
       WORKER_ID: worker:compose-primary
     depends_on:

@@ -4,6 +4,8 @@ import type {
   AssetList,
   AuditEventList,
   CreatedApiKey,
+  CreateDerivativeRequest,
+  Derivative,
   JobList,
   Project,
   ProjectList,
@@ -110,6 +112,17 @@ export const api = {
       headers: { 'if-match': etag },
       body: JSON.stringify(input),
     }),
+  createDerivative: (
+    organizationId: string,
+    projectId: string,
+    publicId: string,
+    version: number,
+    input: CreateDerivativeRequest,
+  ) =>
+    request<Derivative>(
+      `${projectPath(organizationId, projectId)}/assets/${publicId}/versions/${version}/derivatives`,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
   upload: (
     organizationId: string,
     projectId: string,

@@ -2,12 +2,16 @@
 FROM node:24.19.0-bookworm-slim AS build
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
+ENV PNPM_CONFIG_FETCH_TIMEOUT=300000
+ENV PNPM_CONFIG_FETCH_RETRIES=5
+ENV PNPM_CONFIG_NETWORK_CONCURRENCY=8
 RUN corepack enable
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=aeonic-pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter @aeonic/dashboard...
 COPY apps/dashboard apps/dashboard
 COPY packages/contracts packages/contracts
 COPY scripts scripts

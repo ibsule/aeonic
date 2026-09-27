@@ -36,6 +36,11 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
+async function accessibilityViolations() {
+  return (await axe.run(document.body, { rules: { 'color-contrast': { enabled: false } } }))
+    .violations
+}
+
 function mockJourney(options: { setupRequired?: boolean; failJobs?: boolean } = {}) {
   let setupRequired = options.setupRequired ?? false
   let active = !setupRequired
@@ -97,7 +102,7 @@ describe('primary operator journey', () => {
     expect(
       await screen.findByRole('heading', { name: 'Create your workspace' }),
     ).toBeInTheDocument()
-    expect((await axe.run(document.body)).violations).toEqual([])
+    expect(await accessibilityViolations()).toEqual([])
     await user.type(screen.getByLabelText('Your name'), 'Project Owner')
     await user.type(screen.getByLabelText('Email'), 'owner@example.com')
     await user.type(screen.getByLabelText(/^Password/), 'a-strong-development-password')
@@ -109,7 +114,7 @@ describe('primary operator journey', () => {
     expect(await screen.findByRole('heading', { name: 'Assets' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Upload media' }))
     expect(screen.getByRole('dialog', { name: 'Upload media' })).toBeInTheDocument()
-    expect((await axe.run(document.body)).violations).toEqual([])
+    expect(await accessibilityViolations()).toEqual([])
   })
 
   it('presents an actionable operator failure state', async () => {

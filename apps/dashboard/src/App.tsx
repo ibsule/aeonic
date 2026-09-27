@@ -2,6 +2,7 @@ import type {
   ApiKey,
   Asset,
   AuditEvent,
+  CreateDerivativeRequest,
   Job,
   Project,
   ProjectStorageOverview,
@@ -962,6 +963,7 @@ function AssetDrawer({
   const [asset, setAsset] = useState(selected)
   const [etag, setEtag] = useState('')
   const [error, setError] = useState('')
+  const [derivativeMessage, setDerivativeMessage] = useState('')
   const [pending, setPending] = useState(false)
   useEffect(() => {
     void api
@@ -997,6 +999,29 @@ function AssetDrawer({
       setPending(false)
     }
   }
+  async function queueDerivative(input: CreateDerivativeRequest) {
+    setPending(true)
+    setError('')
+    setDerivativeMessage('')
+    try {
+      const derivative = await api.createDerivative(
+        scope.organizationId,
+        scope.projectId,
+        asset.publicId,
+        asset.currentVersion,
+        input,
+      )
+      setDerivativeMessage(
+        derivative.state === 'ready'
+          ? 'This derivative was already available.'
+          : 'Derivative queued. Follow its progress on the Jobs page.',
+      )
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setPending(false)
+    }
+  }
   const original = `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}/assets/${asset.publicId}/versions/${asset.currentVersion}/original`
   return (
     <div className="drawer-backdrop">
@@ -1022,6 +1047,12 @@ function AssetDrawer({
           </button>
         </div>
         {error ? <Notice>{error}</Notice> : null}
+        {derivativeMessage ? (
+          <div className="notice success-notice" role="status">
+            <Check aria-hidden="true" size={18} />
+            <p>{derivativeMessage}</p>
+          </div>
+        ) : null}
         <div className={`asset-hero ${asset.mediaKind}`}>
           <span>{asset.mediaKind}</span>
         </div>
@@ -1064,6 +1095,64 @@ function AssetDrawer({
             {pending ? <LoaderCircle className="spin" /> : <Check />}Save changes
           </button>
         </form>
+        {asset.state === 'ready' && asset.mediaKind !== 'image' ? (
+          <section className="form-stack" aria-labelledby="derivative-actions-title">
+            <div>
+              <p className="eyebrow">Processing</p>
+              <h3 id="derivative-actions-title">Create a derivative</h3>
+            </div>
+            {asset.mediaKind === 'video' ? (
+              <>
+                <button
+                  className="secondary-button wide"
+                  disabled={pending}
+                  type="button"
+                  onClick={() => void queueDerivative({ operation: 'video_poster' })}
+                >
+                  Generate poster image
+                </button>
+                <button
+                  className="secondary-button wide"
+                  disabled={pending}
+                  type="button"
+                  onClick={() =>
+                    void queueDerivative({ operation: 'video_transcode', preset: 'mp4-720p' })
+                  }
+                >
+                  Transcode to MP4 720p
+                </button>
+              </>
+            ) : asset.version?.mimeType === 'application/pdf' ? (
+              <>
+                <button
+                  className="secondary-button wide"
+                  disabled={pending}
+                  type="button"
+                  onClick={() => void queueDerivative({ operation: 'pdf_thumbnail' })}
+                >
+                  Generate PDF thumbnail
+                </button>
+                <button
+                  className="secondary-button wide"
+                  disabled={pending}
+                  type="button"
+                  onClick={() => void queueDerivative({ operation: 'pdf_text' })}
+                >
+                  Extract searchable text
+                </button>
+              </>
+            ) : (
+              <button
+                className="secondary-button wide"
+                disabled={pending}
+                type="button"
+                onClick={() => void queueDerivative({ operation: 'office_preview' })}
+              >
+                Generate PDF preview
+              </button>
+            )}
+          </section>
+        ) : null}
         <a className="secondary-button wide" href={original} target="_blank" rel="noreferrer">
           <ArrowUpRight />
           Open original
