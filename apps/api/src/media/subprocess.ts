@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { join } from 'node:path'
 
 export type MediaCommandFailureCode =
   | 'invalid_command'
@@ -26,6 +27,7 @@ export interface MediaCommandOptions {
   readonly maxStdoutBytes: number
   readonly maxStderrBytes: number
   readonly signal?: AbortSignal
+  readonly runtimeDirectory?: string
 }
 
 export interface MediaCommandResult {
@@ -71,7 +73,19 @@ export async function runMediaCommand(
     let stderrBytes = 0
     const child = spawn(executable, [...args], {
       ...(options.cwd ? { cwd: options.cwd } : {}),
-      env: { PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C', LC_ALL: 'C' },
+      env: {
+        PATH: process.env.PATH ?? '/usr/bin:/bin',
+        HOME: process.env.HOME ?? '/tmp',
+        LANG: 'C',
+        LC_ALL: 'C',
+        ...(options.runtimeDirectory
+          ? {
+              XDG_CACHE_HOME: join(options.runtimeDirectory, 'cache'),
+              XDG_CONFIG_HOME: join(options.runtimeDirectory, 'config'),
+              TMPDIR: options.runtimeDirectory,
+            }
+          : {}),
+      },
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,

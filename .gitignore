@@ -11,6 +11,7 @@ dist
 # Test and runtime output
 coverage/
 *.log
+var/
 
 # User data — never commit
 data/
