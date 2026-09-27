@@ -38,6 +38,8 @@ describe('configuration', () => {
     assert.equal(config.aiProviderApiKey, undefined)
     assert.equal(config.aiEmbeddingDimensions, 1_024)
     assert.equal(config.aiPipelineVersion, 'semantic-v1')
+    assert.equal(config.aiInputMicroUsdPerMillionUnits, 0)
+    assert.equal(config.aiOutputMicroUsdPerMillionUnits, 0)
     assert.equal(config.qdrantUrl, 'http://qdrant:6333')
     assert.equal(config.version, '0.6.0')
   })

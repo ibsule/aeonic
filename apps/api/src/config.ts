@@ -95,6 +95,18 @@ const environmentSchema = z.object({
   AI_PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
   AI_PROVIDER_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(100).default(5),
   AI_PROVIDER_COOLDOWN_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+  AI_INPUT_MICRO_USD_PER_MILLION_UNITS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000_000_000)
+    .default(0),
+  AI_OUTPUT_MICRO_USD_PER_MILLION_UNITS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000_000_000)
+    .default(0),
   QDRANT_URL: z.url().default('http://qdrant:6333'),
   QDRANT_API_KEY: z.string().min(1).optional(),
   QDRANT_API_KEY_FILE: z.string().trim().min(1).optional(),
@@ -162,6 +174,8 @@ export interface AppConfig {
   readonly aiProviderTimeoutMs: number
   readonly aiProviderFailureThreshold: number
   readonly aiProviderCooldownMs: number
+  readonly aiInputMicroUsdPerMillionUnits: number
+  readonly aiOutputMicroUsdPerMillionUnits: number
   readonly qdrantUrl: string
   readonly qdrantApiKey?: string
   readonly version: string
@@ -447,6 +461,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     aiProviderTimeoutMs: value.AI_PROVIDER_TIMEOUT_MS,
     aiProviderFailureThreshold: value.AI_PROVIDER_FAILURE_THRESHOLD,
     aiProviderCooldownMs: value.AI_PROVIDER_COOLDOWN_MS,
+    aiInputMicroUsdPerMillionUnits: value.AI_INPUT_MICRO_USD_PER_MILLION_UNITS,
+    aiOutputMicroUsdPerMillionUnits: value.AI_OUTPUT_MICRO_USD_PER_MILLION_UNITS,
     qdrantUrl: value.QDRANT_URL.replace(/\/$/, ''),
     ...(qdrantApiKey === undefined ? {} : { qdrantApiKey }),
     version: value.AEONIC_VERSION,

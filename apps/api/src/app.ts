@@ -10,6 +10,9 @@ import express, {
 import helmet from 'helmet'
 import pino, { type Logger } from 'pino'
 import { ApiKeyService } from './api-keys/service.js'
+import type { EmbeddingProvider, VectorIndex } from './ai/contracts.js'
+import { createAiDependencies } from './ai/factory.js'
+import { SemanticSearchService } from './ai/service.js'
 import { AssetService } from './assets/service.js'
 import { SqliteAuditRepository } from './audit/repository.js'
 import { AuditService } from './audit/service.js'
@@ -37,6 +40,7 @@ import { createJobsRouter } from './routes/jobs.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
 import { createProjectsRouter } from './routes/projects.js'
 import { createSetupRouter } from './routes/setup.js'
+import { createSemanticSearchRouter } from './routes/semantic-search.js'
 import { createStorageRouter } from './routes/storage.js'
 import { createTransformPresetsRouter } from './routes/transform-presets.js'
 import { createUploadsRouter } from './routes/uploads.js'
@@ -58,6 +62,8 @@ export interface BuildAppOptions {
   storage?: StorageRuntime
   tusStaging?: TusStagingStore
   tusUploads?: TusUploadService
+  aiEmbeddings?: EmbeddingProvider
+  vectorIndex?: VectorIndex
 }
 
 interface HttpErrorLike {
@@ -143,6 +149,20 @@ export function buildApp(options: BuildAppOptions = {}): Express {
     app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))
     if (options.auth) {
       const projects = new ProjectService(options.database)
+      const aiDependencies = createAiDependencies(config)
+      app.use(
+        '/api/v1',
+        createSemanticSearchRouter(
+          options.auth,
+          new SemanticSearchService(
+            options.database,
+            projects,
+            config,
+            options.aiEmbeddings ?? aiDependencies.embeddings,
+            options.vectorIndex ?? aiDependencies.vectors,
+          ),
+        ),
+      )
       app.use(
         '/api/v1',
         createAssetsRouter(options.auth, new AssetService(options.database, projects)),
