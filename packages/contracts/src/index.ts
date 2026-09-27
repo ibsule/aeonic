@@ -17,6 +17,16 @@ export {
   auditEventSchema,
 } from './audit-events.js'
 export {
+  type AsyncDerivativeKind,
+  type CreateDerivativeRequest,
+  createDerivativeRequestSchema,
+  type Derivative,
+  derivativeKinds,
+  derivativeSchema,
+  type DerivativeState,
+  type VideoDerivativePreset,
+} from './derivatives.js'
+export {
   type CreateDeliveryUrlRequest,
   createDeliveryUrlRequestSchema,
   type DeliveryDisposition,

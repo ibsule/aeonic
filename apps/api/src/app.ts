@@ -17,6 +17,7 @@ import type { AppConfig } from './config.js'
 import { loadConfig } from './config.js'
 import type { DatabaseConnection } from './db/database.js'
 import { DeliveryService } from './delivery/service.js'
+import { AsyncDerivativeService } from './derivatives/async-service.js'
 import { ImageDerivativeService } from './derivatives/service.js'
 import { ApiError } from './http/api-error.js'
 import { sendProblem } from './http/problem.js'
@@ -26,6 +27,7 @@ import { ProjectService } from './projects/service.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
 import { createAuditEventsRouter } from './routes/audit-events.js'
 import { createDeliveryRouter } from './routes/delivery.js'
+import { createDerivativesRouter } from './routes/derivatives.js'
 import { createDocumentationRouter } from './routes/documentation.js'
 import { createHealthRouter } from './routes/health.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
@@ -138,6 +140,13 @@ export function buildApp(options: BuildAppOptions = {}): Express {
     if (options.auth) {
       const projects = new ProjectService(options.database)
       if (options.storage) {
+        app.use(
+          '/api/v1',
+          createDerivativesRouter(
+            options.auth,
+            new AsyncDerivativeService(options.database, projects, options.storage),
+          ),
+        )
         app.use(
           createDeliveryRouter(
             options.auth,

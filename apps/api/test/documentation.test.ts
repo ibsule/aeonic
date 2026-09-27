@@ -42,6 +42,9 @@ describe('API documentation', () => {
       '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/original',
       '/m/{projectId}/{publicId}/v{version}/original/{filename}',
       '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/t/{transformSpec}',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/derivatives',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/derivatives/{derivativeId}',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/derivatives/{derivativeId}/content',
       '/m/{projectId}/{publicId}/v{version}/t/{transformSpec}/{filename}',
       '/api/v1/organizations/{organizationId}/audit-events',
     ]) {

@@ -3,12 +3,14 @@ import {
   assignProjectMemberRequestSchema,
   auditEventListSchema,
   createApiKeyRequestSchema,
+  createDerivativeRequestSchema,
   createDeliveryUrlRequestSchema,
   createdApiKeySchema,
   createProjectRequestSchema,
   createTransformPresetRequestSchema,
   createTransformPresetVersionRequestSchema,
   deliveryUrlSchema,
+  derivativeSchema,
   problemDetailsSchema,
   projectListSchema,
   projectMemberListSchema,
@@ -138,6 +140,9 @@ const deliveryUrlPath = `${assetVersionPath}/delivery-url`
 const authenticatedOriginalPath = `${assetVersionPath}/original`
 const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filename}'
 const authenticatedTransformPath = `${assetVersionPath}/t/{transformSpec}`
+const derivativeCollectionPath = `${assetVersionPath}/derivatives`
+const derivativeItemPath = `${projectItemPath}/derivatives/{derivativeId}`
+const derivativeContentPath = `${derivativeItemPath}/content`
 const publicTransformPath = '/m/{projectId}/{publicId}/v{version}/t/{transformSpec}/{filename}'
 const tusCollectionPath = `${projectItemPath}/tus`
 const tusItemPath = `${tusCollectionPath}/{uploadId}`
@@ -184,6 +189,10 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       {
         name: 'Transform presets',
         description: 'Named and permanently versioned canonical image transformations.',
+      },
+      {
+        name: 'Derivatives',
+        description: 'Durable asynchronous video and document processing.',
       },
     ],
     paths: {
@@ -883,6 +892,79 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           responses: { ...originalResponses, ...standardErrors },
         },
       },
+      [derivativeCollectionPath]: {
+        post: {
+          operationId: 'createDerivative',
+          tags: ['Derivatives'],
+          summary: 'Queue a video or document derivative',
+          description:
+            'Canonicalizes the request and reuses matching work. A ready cache hit returns 200; queued or active work returns 202.',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+          ],
+          requestBody: jsonBody('CreateDerivativeRequest'),
+          responses: {
+            '200': jsonResponse('Existing ready derivative.', 'Derivative'),
+            '202': jsonResponse('Derivative accepted for processing.', 'Derivative'),
+            ...standardErrors,
+            '415': response('Problem'),
+          },
+        },
+      },
+      [derivativeItemPath]: {
+        get: {
+          operationId: 'getDerivative',
+          tags: ['Derivatives'],
+          summary: 'Get asynchronous derivative status',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('DerivativeId'),
+          ],
+          responses: { '200': jsonResponse('Derivative status.', 'Derivative'), ...standardErrors },
+        },
+      },
+      [derivativeContentPath]: {
+        get: {
+          operationId: 'getDerivativeContent',
+          tags: ['Derivatives'],
+          summary: 'Download a completed asynchronous derivative',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('DerivativeId'),
+          ],
+          responses: {
+            '200': {
+              description: 'Completed derivative bytes.',
+              content: { '*/*': { schema: { type: 'string', format: 'binary' } } },
+            },
+            ...standardErrors,
+            '503': response('Problem'),
+          },
+        },
+        head: {
+          operationId: 'headDerivativeContent',
+          tags: ['Derivatives'],
+          summary: 'Inspect completed asynchronous derivative metadata',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('DerivativeId'),
+          ],
+          responses: {
+            '200': { description: 'Completed derivative metadata.' },
+            ...standardErrors,
+          },
+        },
+      },
       [publicTransformPath]: {
         get: {
           operationId: 'getImageTransformByUrl',
@@ -1003,6 +1085,12 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         },
         UploadId: {
           name: 'uploadId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+        DerivativeId: {
+          name: 'derivativeId',
           in: 'path',
           required: true,
           schema: { type: 'string', format: 'uuid' },
@@ -1149,6 +1237,8 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         AuditEventList: component(auditEventListSchema),
         UploadQuery: component(uploadQuerySchema),
         SimpleUploadResult: component(simpleUploadResultSchema),
+        CreateDerivativeRequest: component(createDerivativeRequestSchema),
+        Derivative: component(derivativeSchema),
         CreateDeliveryUrlRequest: component(createDeliveryUrlRequestSchema),
         DeliveryUrl: component(deliveryUrlSchema),
         StorageFailureSummary: component(storageFailureSummarySchema),
