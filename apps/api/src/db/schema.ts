@@ -613,6 +613,285 @@ export const jobs = sqliteTable(
   ],
 )
 
+export const aiProjectSettings = sqliteTable(
+  'ai_project_settings',
+  {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+    allowPrivateAssets: integer('allow_private_assets', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    monthlyBudgetMicroUsd: integer('monthly_budget_micro_usd').notNull().default(0),
+    maxAssetsPerRun: integer('max_assets_per_run').notNull().default(100),
+    concurrency: integer('concurrency').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    updatedBy: text('updated_by').references(() => authSchema.user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'ai_project_settings_project_organization_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('ai_project_settings_project_unique').on(table.organizationId, table.projectId),
+    check('ai_project_settings_budget_nonnegative', sql`${table.monthlyBudgetMicroUsd} >= 0`),
+    check(
+      'ai_project_settings_asset_limit_valid',
+      sql`${table.maxAssetsPerRun} BETWEEN 1 AND 10000`,
+    ),
+    check('ai_project_settings_concurrency_valid', sql`${table.concurrency} BETWEEN 1 AND 16`),
+    check('ai_project_settings_version_positive', sql`${table.version} > 0`),
+  ],
+)
+
+export const aiIndexes = sqliteTable(
+  'ai_indexes',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    state: text('state', {
+      enum: ['building', 'evaluating', 'active', 'retired', 'failed'],
+    })
+      .notNull()
+      .default('building'),
+    provider: text('provider').notNull(),
+    visionModel: text('vision_model').notNull(),
+    embeddingModel: text('embedding_model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    pipelineVersion: text('pipeline_version').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    collectionName: text('collection_name').notNull(),
+    indexedAssets: integer('indexed_assets').notNull().default(0),
+    errorCode: text('error_code'),
+    createdBy: text('created_by').references(() => authSchema.user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    evaluatedAt: integer('evaluated_at', { mode: 'timestamp_ms' }),
+    activatedAt: integer('activated_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'ai_indexes_project_organization_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('ai_indexes_collection_unique').on(table.collectionName),
+    uniqueIndex('ai_indexes_one_active_per_project')
+      .on(table.organizationId, table.projectId)
+      .where(sql`${table.state} = 'active'`),
+    index('ai_indexes_project_state_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.state,
+      table.createdAt,
+    ),
+    check(
+      'ai_indexes_state_valid',
+      sql`${table.state} IN ('building', 'evaluating', 'active', 'retired', 'failed')`,
+    ),
+    check('ai_indexes_dimensions_valid', sql`${table.dimensions} BETWEEN 1 AND 65536`),
+    check('ai_indexes_count_nonnegative', sql`${table.indexedAssets} >= 0`),
+  ],
+)
+
+export const aiIndexRecords = sqliteTable(
+  'ai_index_records',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    indexId: text('index_id')
+      .notNull()
+      .references(() => aiIndexes.id, { onDelete: 'cascade' }),
+    assetId: text('asset_id').notNull(),
+    assetVersionId: text('asset_version_id').notNull(),
+    pointId: text('point_id').notNull(),
+    contentKind: text('content_kind', {
+      enum: ['image', 'video_keyframe', 'document_chunk', 'document_preview'],
+    }).notNull(),
+    chunkOrdinal: integer('chunk_ordinal').notNull().default(0),
+    sourceText: text('source_text'),
+    caption: text('caption'),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.assetId, table.organizationId, table.projectId],
+      foreignColumns: [assets.id, assets.organizationId, assets.projectId],
+      name: 'ai_index_records_asset_tenant_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.assetVersionId, table.organizationId, table.projectId],
+      foreignColumns: [assetVersions.id, assetVersions.organizationId, assetVersions.projectId],
+      name: 'ai_index_records_asset_version_tenant_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('ai_index_records_point_unique').on(table.pointId),
+    uniqueIndex('ai_index_records_source_unique').on(
+      table.indexId,
+      table.assetVersionId,
+      table.contentKind,
+      table.chunkOrdinal,
+    ),
+    index('ai_index_records_project_asset_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.assetId,
+    ),
+    check('ai_index_records_chunk_nonnegative', sql`${table.chunkOrdinal} >= 0`),
+    check('ai_index_records_dimensions_valid', sql`${table.dimensions} BETWEEN 1 AND 65536`),
+  ],
+)
+
+export const aiAssetExclusions = sqliteTable(
+  'ai_asset_exclusions',
+  {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    assetId: text('asset_id').notNull(),
+    createdBy: text('created_by').references(() => authSchema.user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.assetId, table.organizationId, table.projectId],
+      foreignColumns: [assets.id, assets.organizationId, assets.projectId],
+      name: 'ai_asset_exclusions_asset_tenant_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('ai_asset_exclusions_asset_unique').on(
+      table.organizationId,
+      table.projectId,
+      table.assetId,
+    ),
+  ],
+)
+
+export const aiUsageLedger = sqliteTable(
+  'ai_usage_ledger',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    indexId: text('index_id').references(() => aiIndexes.id, { onDelete: 'set null' }),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    operation: text('operation', { enum: ['caption', 'embedding'] }).notNull(),
+    inputUnits: integer('input_units').notNull().default(0),
+    outputUnits: integer('output_units').notNull().default(0),
+    costMicroUsd: integer('cost_micro_usd').notNull().default(0),
+    occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'ai_usage_ledger_project_organization_fk',
+    }).onDelete('cascade'),
+    index('ai_usage_ledger_project_occurred_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.occurredAt,
+    ),
+    check('ai_usage_input_nonnegative', sql`${table.inputUnits} >= 0`),
+    check('ai_usage_output_nonnegative', sql`${table.outputUnits} >= 0`),
+    check('ai_usage_cost_nonnegative', sql`${table.costMicroUsd} >= 0`),
+  ],
+)
+
+export const semanticEvaluations = sqliteTable(
+  'semantic_evaluations',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    indexId: text('index_id')
+      .notNull()
+      .references(() => aiIndexes.id, { onDelete: 'cascade' }),
+    evaluationVersion: text('evaluation_version').notNull(),
+    queryCount: integer('query_count').notNull(),
+    recallAt10Millionths: integer('recall_at_10_millionths').notNull(),
+    ndcgAt10Millionths: integer('ndcg_at_10_millionths').notNull(),
+    tenantFilterFailures: integer('tenant_filter_failures').notNull().default(0),
+    approved: integer('approved', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'semantic_evaluations_project_organization_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('semantic_evaluations_index_version_unique').on(
+      table.indexId,
+      table.evaluationVersion,
+    ),
+    check('semantic_evaluations_query_count_positive', sql`${table.queryCount} > 0`),
+    check(
+      'semantic_evaluations_recall_range',
+      sql`${table.recallAt10Millionths} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      'semantic_evaluations_ndcg_range',
+      sql`${table.ndcgAt10Millionths} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      'semantic_evaluations_filter_failures_nonnegative',
+      sql`${table.tenantFilterFailures} >= 0`,
+    ),
+  ],
+)
+
+export const assetSearchDocuments = sqliteTable(
+  'asset_search_documents',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').notNull(),
+    assetId: text('asset_id').notNull(),
+    publicId: text('public_id').notNull(),
+    name: text('name').notNull(),
+    folder: text('folder').notNull().default(''),
+    metadataText: text('metadata_text').notNull().default(''),
+    extractedText: text('extracted_text').notNull().default(''),
+    caption: text('caption').notNull().default(''),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.assetId, table.organizationId, table.projectId],
+      foreignColumns: [assets.id, assets.organizationId, assets.projectId],
+      name: 'asset_search_documents_asset_tenant_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('asset_search_documents_asset_unique').on(
+      table.organizationId,
+      table.projectId,
+      table.assetId,
+    ),
+    index('asset_search_documents_project_idx').on(table.organizationId, table.projectId),
+  ],
+)
+
 export const auditEvents = sqliteTable(
   'audit_events',
   {
@@ -639,7 +918,13 @@ export const auditEvents = sqliteTable(
 
 export const schema = {
   ...authSchema,
+  aiAssetExclusions,
+  aiIndexRecords,
+  aiIndexes,
+  aiProjectSettings,
+  aiUsageLedger,
   assets,
+  assetSearchDocuments,
   assetVersions,
   auditEvents,
   jobs,
@@ -647,6 +932,7 @@ export const schema = {
   projectApiKeys,
   projects,
   storageObjects,
+  semanticEvaluations,
   systemSettings,
   uploads,
 }
