@@ -5,6 +5,7 @@ import type {
   AuditEventList,
   CreatedApiKey,
   JobList,
+  Project,
   ProjectList,
   ProjectStorageOverview,
   SetupRequest,
@@ -82,10 +83,10 @@ export const api = {
   projects: (organizationId: string) =>
     request<ProjectList>(`/api/v1/organizations/${organizationId}/projects`),
   createProject: (organizationId: string, name: string, slug: string) =>
-    request<{ id: string; name: string; slug: string }>(
-      `/api/v1/organizations/${organizationId}/projects`,
-      { method: 'POST', body: JSON.stringify({ name, slug }) },
-    ),
+    request<Project>(`/api/v1/organizations/${organizationId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({ name, slug }),
+    }),
   assets: (organizationId: string, projectId: string, query = '') =>
     request<AssetList>(`${projectPath(organizationId, projectId)}/assets?limit=100${query}`),
   asset: async (organizationId: string, projectId: string, publicId: string) => {

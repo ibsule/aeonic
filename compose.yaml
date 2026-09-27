@@ -1,0 +1,100 @@
+name: aeonic
+
+x-runtime: &runtime
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: aeonic-api:0.6.0
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    NODE_ENV: production
+    HOST: 0.0.0.0
+    PORT: 3001
+    TRUST_PROXY: "true"
+    DATABASE_PATH: /app/data/aeonic.db
+    LOCAL_STORAGE_PATH: /app/data/objects
+    TUS_STORAGE_PATH: /app/data/tus
+    BETTER_AUTH_URL: ${AEONIC_ORIGIN:-https://localhost}
+    DELIVERY_BASE_URL: ${AEONIC_ORIGIN:-https://localhost}
+    AEONIC_VERSION: 0.6.0
+  volumes:
+    - aeonic-data:/app/data
+  networks:
+    - internal
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  edge:
+    build:
+      context: .
+      dockerfile: Dockerfile.edge
+    image: aeonic-edge:0.6.0
+    restart: unless-stopped
+    environment:
+      AEONIC_ORIGIN: ${AEONIC_ORIGIN:-https://localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - edge
+      - internal
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    <<: *runtime
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    <<: *runtime
+    command: ["node", "--enable-source-maps", "apps/api/dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /app/data/aeonic.db
+      LOCAL_STORAGE_PATH: /app/data/objects
+      TUS_STORAGE_PATH: /app/data/tus
+      BETTER_AUTH_URL: ${AEONIC_ORIGIN:-https://localhost}
+      DELIVERY_BASE_URL: ${AEONIC_ORIGIN:-https://localhost}
+      AEONIC_VERSION: 0.6.0
+      WORKER_ID: worker:compose-primary
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  edge:
+  internal:
+    internal: true
+
+volumes:
+  aeonic-data:
+  caddy-data:
+  caddy-config:

@@ -36,7 +36,15 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useState } from 'react'
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { api, type Session } from './api'
 
 type Page = 'overview' | 'assets' | 'presets' | 'jobs' | 'keys' | 'usage' | 'audit' | 'settings'
@@ -110,6 +118,42 @@ function Empty({ icon, title, copy }: { icon: ReactNode; title: string; copy: st
       <p>{copy}</p>
     </div>
   )
+}
+function useDialogKeyboard(close: () => void) {
+  const ref = useRef<HTMLElement | null>(null)
+  const closeRef = useRef(close)
+  closeRef.current = close
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusable = () =>
+      [
+        ...(ref.current?.querySelectorAll<HTMLElement>(
+          'button, a[href], input, select, [tabindex]:not([tabindex="-1"])',
+        ) ?? []),
+      ].filter((element) => !element.hasAttribute('disabled'))
+    focusable()[0]?.focus()
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeRef.current()
+      if (event.key !== 'Tab') return
+      const items = focusable()
+      const first = items[0]
+      const last = items.at(-1)
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', keydown)
+    return () => {
+      document.removeEventListener('keydown', keydown)
+      previous?.focus()
+    }
+  }, [])
+  return ref
 }
 function Header({
   eyebrow,
@@ -411,6 +455,7 @@ function Workspace({
   const [scope, setScope] = useState<Scope | null>(initialScope)
   const [page, setPage] = useState<Page>('overview')
   const [upload, setUpload] = useState(false)
+  const [newProject, setNewProject] = useState(false)
   const [mobile, setMobile] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -521,10 +566,24 @@ function Workspace({
             </select>
             <ChevronDown size={15} />
           </label>
-          <button className="primary-button compact" type="button" onClick={() => setUpload(true)}>
-            <Upload size={16} />
-            Upload
-          </button>
+          <div className="topbar-actions">
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setNewProject(true)}
+              aria-label="Create project"
+            >
+              <Plus size={18} />
+            </button>
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={() => setUpload(true)}
+            >
+              <Upload size={16} />
+              Upload
+            </button>
+          </div>
         </header>
         <main id="main-content" tabIndex={-1}>
           <Content page={page} scope={scope} project={project} openUpload={() => setUpload(true)} />
@@ -537,6 +596,17 @@ function Workspace({
           done={() => {
             setUpload(false)
             setPage('assets')
+          }}
+        />
+      ) : null}
+      {newProject ? (
+        <ProjectModal
+          organizationId={scope.organizationId}
+          close={() => setNewProject(false)}
+          done={(created) => {
+            setProjects((items) => [...items, created])
+            setScope({ organizationId: scope.organizationId, projectId: created.id })
+            setNewProject(false)
           }}
         />
       ) : null}
@@ -888,6 +958,7 @@ function AssetDrawer({
   close: () => void
   saved: (item: Asset) => void
 }) {
+  const dialogRef = useDialogKeyboard(close)
   const [asset, setAsset] = useState(selected)
   const [etag, setEtag] = useState('')
   const [error, setError] = useState('')
@@ -929,7 +1000,13 @@ function AssetDrawer({
   const original = `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}/assets/${asset.publicId}/versions/${asset.currentVersion}/original`
   return (
     <div className="drawer-backdrop">
-      <aside className="drawer" aria-labelledby="asset-title">
+      <aside
+        ref={dialogRef}
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="asset-title"
+      >
         <div className="drawer-heading">
           <div>
             <p className="eyebrow">Asset details</p>
@@ -1004,6 +1081,7 @@ function UploadModal({
   close: () => void
   done: () => void
 }) {
+  const dialogRef = useDialogKeyboard(close)
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
@@ -1035,7 +1113,13 @@ function UploadModal({
   }
   return (
     <div className="modal-backdrop">
-      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+      <section
+        ref={dialogRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upload-title"
+      >
         <div className="drawer-heading">
           <div>
             <p className="eyebrow">New original</p>
@@ -1072,6 +1156,68 @@ function UploadModal({
           </Field>
           <button className="primary-button wide" type="submit" disabled={pending}>
             {pending ? <LoaderCircle className="spin" /> : <Upload />}Upload original
+          </button>
+        </form>
+      </section>
+    </div>
+  )
+}
+
+function ProjectModal({
+  organizationId,
+  close,
+  done,
+}: {
+  organizationId: string
+  close: () => void
+  done: (project: Project) => void
+}) {
+  const dialogRef = useDialogKeyboard(close)
+  const [error, setError] = useState('')
+  const [pending, setPending] = useState(false)
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const name = String(new FormData(event.currentTarget).get('name'))
+    setPending(true)
+    setError('')
+    try {
+      done(await api.createProject(organizationId, name, slugify(name)))
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setPending(false)
+    }
+  }
+  return (
+    <div className="modal-backdrop">
+      <section
+        ref={dialogRef}
+        className="modal compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="project-title"
+      >
+        <div className="drawer-heading">
+          <div>
+            <p className="eyebrow">New workspace</p>
+            <h2 id="project-title">Create a project</h2>
+          </div>
+          <button
+            className="icon-plain"
+            type="button"
+            onClick={close}
+            aria-label="Close project form"
+          >
+            <X />
+          </button>
+        </div>
+        {error ? <Notice>{error}</Notice> : null}
+        <form className="form-stack" onSubmit={submit}>
+          <Field label="Project name">
+            <input name="name" required maxLength={100} placeholder="Product library" />
+          </Field>
+          <button className="primary-button wide" type="submit" disabled={pending}>
+            {pending ? <LoaderCircle className="spin" /> : <Plus />}Create project
           </button>
         </form>
       </section>

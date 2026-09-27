@@ -6,8 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.5* provides the trustworthy API foundation, identity/control plane, storage and
-delivery, plus deterministic bounded media processing. It currently ships:
+*Version 0.6* adds an accessible operator experience and a supported Compose deployment to the
+trustworthy API, storage, delivery, and bounded media-processing foundation. It ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -40,10 +40,14 @@ delivery, plus deterministic bounded media processing. It currently ships:
 - Tenant-scoped derivative status, authenticated delivery, explicit cache invalidation, retry-safe
   leases, processor versioning, and audited lifecycle events.
 - OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
+- A responsive React dashboard for first-run setup, projects, uploads, asset metadata and privacy,
+  presets, jobs, storage health, API keys, and audit history.
+- A read-only `doctor` command with configuration, SQLite, permission, and media-tool diagnostics.
+- A hardened three-service Docker Compose deployment with a Caddy TLS/static edge, internal API,
+  internal worker, persistent data volumes, and operator backup/upgrade guidance.
 
-The dashboard, Docker Compose packaging, and AI features are **not implemented yet**. The API and
-worker must both be running for uploads to become ready and for queued video/document derivatives
-to complete. AI is not required for any current upload, processing, or delivery workflow.
+AI features are **not implemented yet** and remain explicitly optional. The API and worker must both
+be running for uploads to become ready and for queued video/document derivatives to complete.
 
 ## Requirements
 
@@ -70,7 +74,8 @@ pnpm --filter @aeonic/api dev
 pnpm --filter @aeonic/api dev:worker
 ```
 
-The API listens on `http://localhost:3001` by default.
+The API listens on `http://localhost:3001` by default. The dashboard listens on
+`http://localhost:4173` and proxies local API requests to port 3001.
 
 ```bash
 curl http://localhost:3001/health/live
@@ -148,6 +153,12 @@ Use [`.env.example`](./.env.example) as the configuration reference. Environment
 provided by your shell or process supervisor; automatic `.env` file loading is not currently part
 of the runtime.
 
+## Docker Compose
+
+For a no-CLI-after-installation experience, follow [the Compose deployment guide](./docs/deployment.md).
+It covers secret generation, TLS, first-run setup, diagnostics, backup, and recovery. Review
+[the upgrade and rollback guide](./docs/upgrade.md) before changing versions.
+
 ## Commands
 
 | Command | Purpose |
@@ -155,6 +166,7 @@ of the runtime.
 | `pnpm dev` | Build workspace dependencies and run development watchers |
 | `pnpm --filter @aeonic/api dev:worker` | Run the media worker in watch mode |
 | `pnpm --filter @aeonic/api start:worker` | Run the compiled media worker |
+| `pnpm --filter @aeonic/api run doctor` | Run read-only deployment diagnostics after building |
 | `pnpm build` | Produce clean ESM output for every package |
 | `pnpm --filter @aeonic/api db:migrate` | Apply checked-in database migrations |
 | `pnpm --filter @aeonic/api auth:schema` | Regenerate the Better Auth Drizzle schema |
@@ -172,6 +184,7 @@ of the runtime.
 ```text
 apps/
   api/                 Express control-plane API
+  dashboard/           React and Vite operator workspace
 packages/
   contracts/           Transport schemas and shared public types
 scripts/               Repository maintenance scripts

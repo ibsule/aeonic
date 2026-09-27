@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1.7
+FROM node:24.19.0-bookworm-slim AS build
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable
+WORKDIR /workspace
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY apps/dashboard/package.json apps/dashboard/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+RUN pnpm install --frozen-lockfile
+COPY apps/dashboard apps/dashboard
+COPY packages/contracts packages/contracts
+COPY scripts scripts
+RUN pnpm --filter @aeonic/dashboard... build
+
+FROM caddy:2.10.2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /workspace/apps/dashboard/dist /srv

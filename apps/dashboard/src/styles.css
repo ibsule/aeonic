@@ -936,6 +936,7 @@ h2 {
   display: grid;
   margin: 18px 0 0;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: component selectors do not overlap. */
 .definition-list div {
   display: grid;
   grid-template-columns: 145px minmax(0, 1fr);
@@ -965,6 +966,7 @@ h2 {
   border-radius: 999px;
   overflow: hidden;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: component selectors do not overlap. */
 .large-meter span {
   display: block;
   height: 100%;
@@ -1038,6 +1040,9 @@ h2 {
   background: #f6f6f1;
   border-radius: 12px;
 }
+.compact-modal {
+  max-width: 440px;
+}
 .drawer-heading {
   display: flex;
   align-items: flex-start;
@@ -1083,6 +1088,7 @@ h2 {
   border-radius: 8px;
   overflow: hidden;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: component selectors do not overlap. */
 .metadata-grid div {
   padding: 12px;
   background: #fafaf6;
@@ -1111,6 +1117,7 @@ h2 {
   color: #4f554d;
   font-size: 12px;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: component selectors do not overlap. */
 .drop-zone span {
   font-size: 9px;
 }

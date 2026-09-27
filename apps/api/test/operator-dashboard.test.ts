@@ -101,11 +101,13 @@ describe('operator dashboard APIs', () => {
     assert.equal(list.body.items.length, 1)
     assert.equal(list.body.items[0].version.width, 1200)
     const read = await agent.get(`${base}/${publicId}`).expect(200)
-    assert.match(read.headers.etag, /^"asset-/)
+    const etag = read.headers.etag
+    assert.ok(etag)
+    assert.match(etag, /^"asset-/)
     await agent.patch(`${base}/${publicId}`).send({ visibility: 'public' }).expect(428)
     const updated = await agent
       .patch(`${base}/${publicId}`)
-      .set('if-match', read.headers.etag)
+      .set('if-match', etag)
       .send({ name: 'Autumn hero', visibility: 'public' })
       .expect(200)
     assert.equal(updated.body.name, 'Autumn hero')
