@@ -1,4 +1,17 @@
 export {
+  type Asset,
+  type AssetList,
+  assetListSchema,
+  assetSchema,
+  type AssetState,
+  assetStates,
+  type AssetVersionSummary,
+  assetVersionSummarySchema,
+  type AssetVisibility,
+  type UpdateAssetRequest,
+  updateAssetRequestSchema,
+} from './assets.js'
+export {
   type ApiKey,
   type ApiKeyList,
   type ApiKeyScope,
@@ -35,6 +48,14 @@ export {
   deliveryUrlSchema,
 } from './delivery.js'
 export { type ServiceStatus, serviceStatusSchema } from './health.js'
+export {
+  type Job,
+  type JobList,
+  jobListSchema,
+  jobSchema,
+  type JobState,
+  jobStates,
+} from './jobs.js'
 export { type ProblemDetails, problemDetailsSchema } from './problem-details.js'
 export {
   type AssignProjectMemberRequest,

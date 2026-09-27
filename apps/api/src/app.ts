@@ -10,6 +10,7 @@ import express, {
 import helmet from 'helmet'
 import pino, { type Logger } from 'pino'
 import { ApiKeyService } from './api-keys/service.js'
+import { AssetService } from './assets/service.js'
 import { SqliteAuditRepository } from './audit/repository.js'
 import { AuditService } from './audit/service.js'
 import type { AuthService } from './auth/auth.js'
@@ -20,16 +21,19 @@ import { DeliveryService } from './delivery/service.js'
 import { AsyncDerivativeService } from './derivatives/async-service.js'
 import { ImageDerivativeService } from './derivatives/service.js'
 import { ApiError } from './http/api-error.js'
+import { JobService } from './jobs/service.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
 import { ProjectMemberService } from './projects/members.js'
 import { ProjectService } from './projects/service.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
+import { createAssetsRouter } from './routes/assets.js'
 import { createAuditEventsRouter } from './routes/audit-events.js'
 import { createDeliveryRouter } from './routes/delivery.js'
 import { createDerivativesRouter } from './routes/derivatives.js'
 import { createDocumentationRouter } from './routes/documentation.js'
 import { createHealthRouter } from './routes/health.js'
+import { createJobsRouter } from './routes/jobs.js'
 import { createProjectMembersRouter } from './routes/project-members.js'
 import { createProjectsRouter } from './routes/projects.js'
 import { createSetupRouter } from './routes/setup.js'
@@ -139,6 +143,11 @@ export function buildApp(options: BuildAppOptions = {}): Express {
     app.use('/api/v1/setup', createSetupRouter(new SetupService(options.database)))
     if (options.auth) {
       const projects = new ProjectService(options.database)
+      app.use(
+        '/api/v1',
+        createAssetsRouter(options.auth, new AssetService(options.database, projects)),
+      )
+      app.use('/api/v1', createJobsRouter(options.auth, new JobService(options.database, projects)))
       if (options.storage) {
         app.use(
           '/api/v1',
