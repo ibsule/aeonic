@@ -17,6 +17,7 @@ import type { AppConfig } from './config.js'
 import { loadConfig } from './config.js'
 import type { DatabaseConnection } from './db/database.js'
 import { DeliveryService } from './delivery/service.js'
+import { ImageDerivativeService } from './derivatives/service.js'
 import { ApiError } from './http/api-error.js'
 import { sendProblem } from './http/problem.js'
 import { createAppLogger, createHttpLogger } from './logging.js'
@@ -141,6 +142,7 @@ export function buildApp(options: BuildAppOptions = {}): Express {
           createDeliveryRouter(
             options.auth,
             new DeliveryService(options.database, projects, options.storage, config),
+            new ImageDerivativeService(options.database, options.storage, config),
             config,
           ),
         )

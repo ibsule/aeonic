@@ -41,6 +41,8 @@ describe('API documentation', () => {
       '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/delivery-url',
       '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/original',
       '/m/{projectId}/{publicId}/v{version}/original/{filename}',
+      '/api/v1/organizations/{organizationId}/projects/{projectId}/assets/{publicId}/versions/{version}/t/{transformSpec}',
+      '/m/{projectId}/{publicId}/v{version}/t/{transformSpec}/{filename}',
       '/api/v1/organizations/{organizationId}/audit-events',
     ]) {
       assert.ok(paths.includes(expected), `missing documented path: ${expected}`)

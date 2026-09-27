@@ -8,12 +8,14 @@ export const createDeliveryUrlRequestSchema = {
   properties: {
     expiresInSeconds: { type: 'integer', minimum: 60, maximum: 86_400 },
     disposition: { type: 'string', enum: deliveryDispositions },
+    transform: { type: 'string', minLength: 1, maxLength: 256 },
   },
 } as const
 
 export interface CreateDeliveryUrlRequest {
   expiresInSeconds?: number
   disposition?: DeliveryDisposition
+  transform?: string
 }
 
 export const deliveryUrlSchema = {

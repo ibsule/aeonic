@@ -1,9 +1,15 @@
 import type { Readable } from 'node:stream'
 import type {
+  CanonicalImageTransformV1,
   CreateDeliveryUrlRequest,
   DeliveryDisposition,
   DeliveryUrl,
   MediaKind,
+} from '@aeonic/contracts'
+import {
+  parseImageTransformV1,
+  parseTransformPresetSelector,
+  TransformSpecError,
 } from '@aeonic/contracts'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
@@ -15,6 +21,7 @@ import {
   auditEvents,
   projectApiKeys,
   storageObjects,
+  transformPresets,
   uploads,
 } from '../db/schema.js'
 import { ApiError } from '../http/api-error.js'
@@ -23,7 +30,11 @@ import type { ProjectService } from '../projects/service.js'
 import type { TenantScope } from '../repositories/types.js'
 import { StorageError, type StorageObjectKey } from '../storage/contracts.js'
 import type { StorageRuntime } from '../storage/factory.js'
-import { createOriginalDeliveryPath, DeliverySigner } from './signing.js'
+import {
+  createOriginalDeliveryPath,
+  createTransformDeliveryPath,
+  DeliverySigner,
+} from './signing.js'
 
 export interface OriginalAsset {
   scope: TenantScope
@@ -257,12 +268,21 @@ export class DeliveryService {
     const expires =
       Math.floor(now.getTime() / 1_000) +
       (input.expiresInSeconds ?? this.config.deliveryUrlTtlSeconds)
-    const path = createOriginalDeliveryPath({
-      projectId: asset.scope.projectId,
-      publicId: asset.publicId,
-      version: asset.version,
-      filename: asset.filename,
-    })
+    const transform = input.transform ? this.resolveTransform(asset, input.transform) : null
+    const path = transform
+      ? createTransformDeliveryPath({
+          projectId: asset.scope.projectId,
+          publicId: asset.publicId,
+          version: asset.version,
+          canonicalSpec: transform.canonicalSpec,
+          filename: asset.filename,
+        })
+      : createOriginalDeliveryPath({
+          projectId: asset.scope.projectId,
+          publicId: asset.publicId,
+          version: asset.version,
+          filename: asset.filename,
+        })
     const signed = this.#signer.create(path, expires, disposition)
     const url = new URL(path, this.config.deliveryBaseUrl)
     url.searchParams.set('disposition', disposition)
@@ -282,12 +302,45 @@ export class DeliveryService {
         targetType: 'asset',
         targetId: asset.assetId,
         requestId,
-        summary: { version: asset.version, disposition, expiresAt: expires },
+        summary: {
+          version: asset.version,
+          disposition,
+          expiresAt: expires,
+          ...(transform ? { transform: transform.canonicalSpec } : {}),
+        },
         createdAt: now,
       })
       .run()
 
     return { url: url.toString(), expiresAt: new Date(expires * 1_000).toISOString() }
+  }
+
+  resolveTransform(asset: OriginalAsset, specification: string): CanonicalImageTransformV1 {
+    const selector = parseTransformPresetSelector(specification)
+    if (selector) {
+      const preset = this.database.db
+        .select({ canonicalSpec: transformPresets.canonicalSpec })
+        .from(transformPresets)
+        .where(
+          and(
+            eq(transformPresets.organizationId, asset.scope.organizationId),
+            eq(transformPresets.projectId, asset.scope.projectId),
+            eq(transformPresets.name, selector.name),
+            eq(transformPresets.version, selector.version),
+          ),
+        )
+        .get()
+      if (!preset) throw notFound()
+      return parseImageTransformV1(preset.canonicalSpec)
+    }
+    try {
+      return parseImageTransformV1(specification)
+    } catch (error) {
+      if (error instanceof TransformSpecError) {
+        throw new ApiError(400, 'Invalid transform', error.code, error.message)
+      }
+      throw error
+    }
   }
 
   async open(

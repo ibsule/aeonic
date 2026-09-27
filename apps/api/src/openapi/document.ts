@@ -137,6 +137,8 @@ const assetVersionPath = `${projectItemPath}/assets/{publicId}/versions/{version
 const deliveryUrlPath = `${assetVersionPath}/delivery-url`
 const authenticatedOriginalPath = `${assetVersionPath}/original`
 const publicOriginalPath = '/m/{projectId}/{publicId}/v{version}/original/{filename}'
+const authenticatedTransformPath = `${assetVersionPath}/t/{transformSpec}`
+const publicTransformPath = '/m/{projectId}/{publicId}/v{version}/t/{transformSpec}/{filename}'
 const tusCollectionPath = `${projectItemPath}/tus`
 const tusItemPath = `${tusCollectionPath}/{uploadId}`
 const storageOverviewPath = `${projectItemPath}/storage`
@@ -841,6 +843,94 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           responses: { ...originalResponses, '404': response('Problem') },
         },
       },
+      [authenticatedTransformPath]: {
+        get: {
+          operationId: 'getAuthenticatedImageTransform',
+          tags: ['Delivery'],
+          summary: 'Generate or download an image derivative with project credentials',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('TransformSpec'),
+            parameter('Disposition'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, ...standardErrors },
+        },
+        head: {
+          operationId: 'headAuthenticatedImageTransform',
+          tags: ['Delivery'],
+          summary: 'Inspect image-derivative response metadata with project credentials',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('TransformSpec'),
+            parameter('Disposition'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, ...standardErrors },
+        },
+      },
+      [publicTransformPath]: {
+        get: {
+          operationId: 'getImageTransformByUrl',
+          tags: ['Delivery'],
+          summary: 'Generate or download an image derivative by canonical URL',
+          description:
+            'Automatic formats negotiate through Accept and return Vary: Accept. Private assets require the complete signed query.',
+          security: [],
+          parameters: [
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('TransformSpec'),
+            parameter('Filename'),
+            parameter('Disposition'),
+            parameter('DeliveryExpires'),
+            parameter('DeliveryKeyId'),
+            parameter('DeliverySignature'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, '404': response('Problem') },
+        },
+        head: {
+          operationId: 'headImageTransformByUrl',
+          tags: ['Delivery'],
+          summary: 'Inspect canonical image-derivative response metadata',
+          security: [],
+          parameters: [
+            parameter('ProjectId'),
+            parameter('PublicId'),
+            parameter('Version'),
+            parameter('TransformSpec'),
+            parameter('Filename'),
+            parameter('Disposition'),
+            parameter('DeliveryExpires'),
+            parameter('DeliveryKeyId'),
+            parameter('DeliverySignature'),
+            parameter('Range'),
+            parameter('IfNoneMatch'),
+            parameter('IfModifiedSince'),
+            parameter('IfRange'),
+          ],
+          responses: { ...originalResponses, '404': response('Problem') },
+        },
+      },
       '/api/v1/organizations/{organizationId}/audit-events': {
         get: {
           operationId: 'listAuditEvents',
@@ -950,6 +1040,13 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           name: 'disposition',
           in: 'query',
           schema: createDeliveryUrlRequestSchema.properties.disposition,
+        },
+        TransformSpec: {
+          name: 'transformSpec',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', minLength: 1, maxLength: 256 },
+          description: 'Canonical inline transform or immutable preset selector.',
         },
         DeliveryExpires: {
           name: 'expires',

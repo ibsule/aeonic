@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import {
   type CreateDeliveryUrlRequest,
@@ -23,7 +24,13 @@ import {
   type OriginalAsset,
   type SignedDeliveryQuery,
 } from '../delivery/service.js'
-import { createOriginalDeliveryPath } from '../delivery/signing.js'
+import { createOriginalDeliveryPath, createTransformDeliveryPath } from '../delivery/signing.js'
+import { resolveImageOutputFormat } from '../derivatives/output-format.js'
+import {
+  DerivativeGenerationPendingError,
+  type ImageDerivative,
+  type ImageDerivativeService,
+} from '../derivatives/service.js'
 import { ApiError } from '../http/api-error.js'
 import { requireProjectActor } from '../http/authentication.js'
 import { sendProblem } from '../http/problem.js'
@@ -156,9 +163,18 @@ function cacheControl(publicCache: boolean, seconds: number): string {
   return publicCache ? `public, max-age=${seconds}, immutable` : 'private, no-store'
 }
 
+function publicNotFound(): ApiError {
+  return new ApiError(
+    404,
+    'Asset not found',
+    'asset_not_found',
+    'The requested asset is not available.',
+  )
+}
+
 function setValidatorHeaders(
   response: Response,
-  asset: OriginalAsset,
+  asset: Pick<OriginalAsset, 'sha256' | 'finalizedAt'>,
   cacheValue: string,
   publicRoute: boolean,
 ): void {
@@ -172,11 +188,22 @@ function setValidatorHeaders(
   })
 }
 
-async function sendOriginal(
+interface DeliverableAsset {
+  readonly sha256: string
+  readonly finalizedAt: Date
+  readonly sizeBytes: number
+  readonly mimeType: string
+  readonly filename: string
+}
+
+async function sendAsset(
   request: Request,
   response: Response,
-  service: DeliveryService,
-  asset: OriginalAsset,
+  asset: DeliverableAsset,
+  open: (
+    range: { start: number; end: number } | undefined,
+    signal: AbortSignal,
+  ) => Promise<Readable>,
   disposition: DeliveryDisposition,
   publicCache: boolean,
   publicRoute: boolean,
@@ -236,7 +263,7 @@ async function sendOriginal(
   response.once('close', () => {
     if (!response.writableEnded) abort()
   })
-  const source = await service.open(asset, range, controller.signal)
+  const source = await open(range, controller.signal)
   response.status(status)
   try {
     await pipeline(source, response, { signal: controller.signal })
@@ -248,6 +275,7 @@ async function sendOriginal(
 export function createDeliveryRouter(
   auth: AuthService,
   delivery: DeliveryService,
+  derivatives: ImageDerivativeService,
   config: AppConfig,
 ): Router {
   const router = Router()
@@ -296,11 +324,11 @@ export function createDeliveryRouter(
       versionParameter(request, false),
     )
     delivery.authorize(principal, asset)
-    await sendOriginal(
+    await sendAsset(
       request,
       response,
-      delivery,
       asset,
+      (range, signal) => delivery.open(asset, range, signal),
       effectiveDisposition(asset.mediaKind, requestedDisposition(query.disposition)),
       false,
       false,
@@ -334,11 +362,11 @@ export function createDeliveryRouter(
         'The requested asset is not available.',
       )
     }
-    await sendOriginal(
+    await sendAsset(
       request,
       response,
-      delivery,
       asset,
+      (range, signal) => delivery.open(asset, range, signal),
       authorization.disposition,
       asset.visibility === 'public' && authorization.signed === null,
       true,
@@ -347,6 +375,137 @@ export function createDeliveryRouter(
   }
   router.get('/m/:projectId/:publicId/v:version/original/:filename', publicHandler)
   router.head('/m/:projectId/:publicId/v:version/original/:filename', publicHandler)
+
+  const transformedFilename = (filename: string, derivative: ImageDerivative): string => {
+    const extension = derivative.outputFormat === 'jpeg' ? 'jpg' : derivative.outputFormat
+    const separator = filename.lastIndexOf('.')
+    return `${separator > 0 ? filename.slice(0, separator) : filename}.${extension}`
+  }
+
+  const serveTransform = async (
+    request: Request,
+    response: Response,
+    asset: OriginalAsset,
+    publicRoute: boolean,
+    disposition: DeliveryDisposition,
+    publicCache: boolean,
+  ): Promise<void> => {
+    const specification = parameter(request, 'transformSpec')
+    const transform = delivery.resolveTransform(asset, specification)
+    if (!specification.startsWith('p_') && specification !== transform.canonicalSpec) {
+      throw publicRoute
+        ? publicNotFound()
+        : new ApiError(
+            400,
+            'Non-canonical transform',
+            'non_canonical_transform',
+            'Use the canonical transform specification.',
+          )
+    }
+    const outputFormat = resolveImageOutputFormat(
+      transform.plan.format,
+      asset.mimeType,
+      request.get('accept'),
+    )
+    if (!outputFormat) {
+      throw new ApiError(
+        406,
+        'Not Acceptable',
+        'image_format_not_acceptable',
+        'No supported derivative format is acceptable to the client.',
+      )
+    }
+    let derivative: ImageDerivative
+    try {
+      derivative = await derivatives.resolve(
+        asset,
+        transform,
+        outputFormat,
+        `request:${String(request.id)}`,
+      )
+    } catch (error) {
+      if (!(error instanceof DerivativeGenerationPendingError)) throw error
+      response.set('retry-after', '1')
+      throw new ApiError(
+        503,
+        'Derivative pending',
+        'derivative_generation_pending',
+        'The derivative is already being generated. Retry shortly.',
+      )
+    }
+    if (transform.plan.format === 'auto') response.vary('Accept')
+    await sendAsset(
+      request,
+      response,
+      { ...derivative, filename: transformedFilename(asset.filename, derivative) },
+      (range, signal) => derivatives.open(derivative, range, signal),
+      disposition,
+      publicCache,
+      publicRoute,
+      config,
+    )
+  }
+
+  const authenticatedTransformPath =
+    '/api/v1/organizations/:organizationId/projects/:projectId/assets/:publicId/versions/:version/t/:transformSpec'
+  const authenticatedTransform = async (request: Request, response: Response): Promise<void> => {
+    const principal = request.principal
+    if (!principal) throw new Error('Authenticated delivery route is missing a principal')
+    const query = queryStrings(request, new Set(['disposition']), false)
+    const scope = {
+      organizationId: assertUuidParameter(request, 'organizationId', false),
+      projectId: assertUuidParameter(request, 'projectId', false),
+    }
+    const asset = delivery.findForProject(
+      scope,
+      assertUuidParameter(request, 'publicId', false),
+      versionParameter(request, false),
+    )
+    delivery.authorize(principal, asset)
+    await serveTransform(
+      request,
+      response,
+      asset,
+      false,
+      effectiveDisposition(asset.mediaKind, requestedDisposition(query.disposition)),
+      false,
+    )
+  }
+  router.get(authenticatedTransformPath, requireRead, authenticatedTransform)
+  router.head(authenticatedTransformPath, requireRead, authenticatedTransform)
+
+  const publicTransform = async (request: Request, response: Response): Promise<void> => {
+    const projectId = assertUuidParameter(request, 'projectId', true)
+    const publicId = assertUuidParameter(request, 'publicId', true)
+    const version = versionParameter(request, true)
+    const asset = delivery.findForPublicPath(projectId, publicId, version)
+    if (parameter(request, 'filename') !== asset.filename) throw publicNotFound()
+    const authorization = publicAuthorization(request, asset)
+    let transform: ReturnType<DeliveryService['resolveTransform']>
+    try {
+      transform = delivery.resolveTransform(asset, parameter(request, 'transformSpec'))
+    } catch {
+      throw publicNotFound()
+    }
+    const path = createTransformDeliveryPath({
+      projectId,
+      publicId,
+      version,
+      canonicalSpec: transform.canonicalSpec,
+      filename: asset.filename,
+    })
+    if (!delivery.isPubliclyAuthorized(asset, path, authorization.signed)) throw publicNotFound()
+    await serveTransform(
+      request,
+      response,
+      asset,
+      true,
+      authorization.disposition,
+      asset.visibility === 'public' && authorization.signed === null,
+    )
+  }
+  router.get('/m/:projectId/:publicId/v:version/t/:transformSpec/:filename', publicTransform)
+  router.head('/m/:projectId/:publicId/v:version/t/:transformSpec/:filename', publicTransform)
 
   return router
 }

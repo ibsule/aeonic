@@ -109,6 +109,15 @@ function deliveryUrlPath(owner: Awaited<ReturnType<typeof initializeOwner>>, pub
   return `/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}/assets/${publicId}/versions/1/delivery-url`
 }
 
+function publicTransformPath(
+  projectId: string,
+  publicId: string,
+  transform: string,
+  filename: string,
+): string {
+  return `/m/${projectId}/${publicId}/v1/t/${transform}/${encodeURIComponent(filename)}`
+}
+
 describe('original asset delivery', () => {
   it('serves public originals with immutable validators and HEAD parity', async () => {
     const { app, database } = createTestApp()
@@ -231,5 +240,66 @@ describe('original asset delivery', () => {
     assert.equal(authenticated.status, 200)
     assert.equal(authenticated.headers['cache-control'], 'private, no-store')
     assert.equal(crossProject.status, 403)
+  })
+})
+
+describe('image transformation delivery', () => {
+  it('generates once and serves negotiated public derivatives with immutable HTTP semantics', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const asset = await upload(owner, 'pixel.png', png, 'public')
+    markReady(database, asset.assetId)
+    const path = publicTransformPath(owner.projectId, asset.publicId, 'w_1,f_auto', 'pixel.png')
+
+    const generated = await request(app).get(path).set('accept', 'image/webp,*/*;q=0.5')
+    const cached = await request(app).get(path).set('accept', 'image/webp,*/*;q=0.5')
+    const head = await request(app).head(path).set('accept', 'image/webp,*/*;q=0.5')
+    const partial = await request(app)
+      .get(path)
+      .set('accept', 'image/webp,*/*;q=0.5')
+      .set('range', 'bytes=0-3')
+    const etag = generated.headers.etag
+    assert.equal(typeof etag, 'string')
+    const conditional = await request(app)
+      .get(path)
+      .set('accept', 'image/webp,*/*;q=0.5')
+      .set('if-none-match', etag as string)
+
+    assert.equal(generated.status, 200)
+    assert.equal(generated.headers['content-type'], 'image/webp')
+    assert.match(generated.headers.vary ?? '', /(?:^|,\s*)Accept(?:,|$)/)
+    assert.equal(generated.headers['cache-control'], 'public, max-age=31536000, immutable')
+    assert.match(generated.headers['content-disposition'] ?? '', /pixel\.webp/)
+    assert.deepEqual(cached.body, generated.body)
+    assert.equal(cached.headers.etag, generated.headers.etag)
+    assert.equal(head.headers['content-length'], generated.headers['content-length'])
+    assert.equal(partial.status, 206)
+    assert.equal(partial.body.byteLength, 4)
+    assert.equal(conditional.status, 304)
+    assert.equal(database.client.prepare('select count(*) from derivatives').pluck().get(), 1)
+  })
+
+  it('protects private transforms with canonical signed URLs', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const asset = await upload(owner, 'private.png', png, 'private')
+    markReady(database, asset.assetId)
+    const path = publicTransformPath(owner.projectId, asset.publicId, 'w_1,f_webp', 'private.png')
+
+    assert.equal((await request(app).get(path)).status, 404)
+    const created = await owner.agent
+      .post(deliveryUrlPath(owner, asset.publicId))
+      .send({ transform: 'f_webp,w_01', expiresInSeconds: 600 })
+    assert.equal(created.status, 201)
+    const signed = new URL(created.body.url as string)
+    assert.match(signed.pathname, /\/t\/w_1%2Cf_webp\/private\.png$/)
+    const delivered = await request(app).get(`${signed.pathname}${signed.search}`)
+    assert.equal(delivered.status, 200)
+    assert.equal(delivered.headers['content-type'], 'image/webp')
+    assert.equal(delivered.headers['cache-control'], 'private, no-store')
+
+    signed.pathname = signed.pathname.replace('w_1', 'w_2')
+    assert.equal((await request(app).get(`${signed.pathname}${signed.search}`)).status, 404)
+    assert.equal((await request(app).get(path.replace('w_1,f_webp', 'f_webp,w_1'))).status, 404)
   })
 })
