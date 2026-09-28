@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@aeonic/contracts": "workspace:*",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "lucide-react": "1.48.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
