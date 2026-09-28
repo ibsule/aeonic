@@ -1,4 +1,4 @@
-import { type AnySchema, Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js'
+import { Ajv2020, type AnySchema, type ValidateFunction } from 'ajv/dist/2020.js'
 import addFormatsModule, { type FormatsPlugin } from 'ajv-formats'
 import type { Response } from 'express'
 

@@ -1,3 +1,4 @@
+import { CircuitBreaker } from './circuit-breaker.js'
 import type {
   EmbeddingProvider,
   EmbeddingResult,
@@ -5,7 +6,6 @@ import type {
   VisionUnderstandingProvider,
   VisionUnderstandingResult,
 } from './contracts.js'
-import { CircuitBreaker } from './circuit-breaker.js'
 
 type Fetch = typeof fetch
 

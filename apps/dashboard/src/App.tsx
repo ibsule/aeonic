@@ -6,9 +6,12 @@ import type {
   Job,
   Project,
   ProjectStorageOverview,
+  SemanticSearchResponse,
+  SemanticSearchSettings,
   SetupRequest,
   TransformPreset,
 } from '@aeonic/contracts'
+import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
   AlertCircle,
@@ -36,7 +39,6 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import {
   type FormEvent,
   type ReactNode,
@@ -881,16 +883,20 @@ function Assets({ scope, openUpload }: { scope: Scope; openUpload: () => void })
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [searchInfo, setSearchInfo] = useState<SemanticSearchResponse | null>(null)
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const result = await api.assets(
-        scope.organizationId,
-        scope.projectId,
-        query ? `&query=${encodeURIComponent(query)}` : '',
-      )
-      setItems(result.items)
+      if (query.trim()) {
+        const result = await api.search(scope.organizationId, scope.projectId, query.trim())
+        setSearchInfo(result)
+        setItems(result.items.map((item) => item.asset))
+      } else {
+        const result = await api.assets(scope.organizationId, scope.projectId)
+        setSearchInfo(null)
+        setItems(result.items)
+      }
     } catch (caught) {
       setError(msg(caught))
     } finally {
@@ -922,12 +928,24 @@ function Assets({ scope, openUpload }: { scope: Scope; openUpload: () => void })
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search name or folder"
+            placeholder="Search names, metadata, text, or visual meaning"
           />
         </label>
         <span>{items.length} assets</span>
       </div>
       {error ? <Notice retry={() => void load()}>{error}</Notice> : null}
+      {searchInfo ? (
+        <div className="search-summary" role="status">
+          <strong>{searchInfo.mode === 'hybrid' ? 'Hybrid search' : 'Lexical search'}</strong>
+          <span>
+            {searchInfo.degradedReason
+              ? `Semantic results are temporarily unavailable (${searchInfo.degradedReason.replaceAll('_', ' ')}).`
+              : searchInfo.mode === 'hybrid'
+                ? 'Results combine exact matches with semantic similarity.'
+                : 'Results use local full-text search; no AI provider is required.'}
+          </span>
+        </div>
+      ) : null}
       <section className="panel">
         {loading ? (
           <Loading label="Loading assets" />
@@ -1015,6 +1033,21 @@ function AssetDrawer({
         derivative.state === 'ready'
           ? 'This derivative was already available.'
           : 'Derivative queued. Follow its progress on the Jobs page.',
+      )
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setPending(false)
+    }
+  }
+  async function excludeFromAi() {
+    setPending(true)
+    setError('')
+    setDerivativeMessage('')
+    try {
+      await api.setAssetAiExclusion(scope.organizationId, scope.projectId, asset.publicId, true)
+      setDerivativeMessage(
+        'This asset is excluded and its semantic vectors are queued for deletion.',
       )
     } catch (caught) {
       setError(msg(caught))
@@ -1157,6 +1190,14 @@ function AssetDrawer({
           <ArrowUpRight />
           Open original
         </a>
+        <button
+          className="secondary-button wide"
+          type="button"
+          disabled={pending}
+          onClick={() => void excludeFromAi()}
+        >
+          <EyeOff /> Exclude from AI indexing
+        </button>
       </aside>
     </div>
   )
@@ -1652,6 +1693,56 @@ function Audit({ scope }: { scope: Scope }) {
   )
 }
 function Settings({ scope, project }: { scope: Scope; project: Project }) {
+  const [semantic, setSemantic] = useState<SemanticSearchSettings | null>(null)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [pending, setPending] = useState(false)
+  const loadSemantic = useCallback(async () => {
+    setError('')
+    try {
+      setSemantic(await api.semanticSettings(scope.organizationId, scope.projectId))
+    } catch (caught) {
+      setError(msg(caught))
+    }
+  }, [scope])
+  useEffect(() => void loadSemantic(), [loadSemantic])
+  async function saveSemantic(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPending(true)
+    setError('')
+    setMessage('')
+    const data = new FormData(event.currentTarget)
+    try {
+      const next = await api.updateSemanticSettings(scope.organizationId, scope.projectId, {
+        enabled: data.get('enabled') === 'on',
+        allowPrivateAssets: data.get('allowPrivateAssets') === 'on',
+        monthlyBudgetMicroUsd: Math.round(Number(data.get('monthlyBudgetUsd')) * 1_000_000),
+        maxAssetsPerRun: Number(data.get('maxAssetsPerRun')),
+        concurrency: Number(data.get('concurrency')),
+      })
+      setSemantic(next)
+      setMessage('Semantic-search settings saved.')
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setPending(false)
+    }
+  }
+  async function reindex() {
+    setPending(true)
+    setError('')
+    setMessage('')
+    try {
+      await api.startSemanticReindex(scope.organizationId, scope.projectId)
+      setMessage(
+        'A candidate index is queued. The current index remains active until evaluation passes.',
+      )
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setPending(false)
+    }
+  }
   return (
     <>
       <Header
@@ -1659,6 +1750,12 @@ function Settings({ scope, project }: { scope: Scope; project: Project }) {
         title="Settings"
         intro="Stable identifiers and delivery routes for this project."
       />
+      {error ? <Notice retry={() => void loadSemantic()}>{error}</Notice> : null}
+      {message ? (
+        <div className="notice success-notice" role="status">
+          {message}
+        </div>
+      ) : null}
       <div className="split-layout">
         <section className="panel padded">
           <h2>Project identity</h2>
@@ -1687,16 +1784,86 @@ function Settings({ scope, project }: { scope: Scope; project: Project }) {
         </section>
         <section className="panel padded">
           <h2>Optional AI capabilities</h2>
-          <div className="optional-feature">
-            <EyeOff />
-            <div>
-              <strong>Not enabled</strong>
+          {!semantic ? (
+            <Loading label="Loading semantic-search settings" />
+          ) : (
+            <form className="form-stack" onSubmit={saveSemantic}>
+              <div className="optional-feature">
+                {semantic.enabled ? <Search /> : <EyeOff />}
+                <div>
+                  <strong>
+                    {semantic.enabled ? 'Semantic search enabled' : 'Semantic search off'}
+                  </strong>
+                  <p>
+                    {semantic.deploymentEnabled && semantic.providerConfigured
+                      ? `${semantic.provider} is configured. Core media features remain independent.`
+                      : 'Start the optional AI Compose profile to enable provider-backed indexing.'}
+                  </p>
+                </div>
+              </div>
+              <label className="check-row">
+                <input name="enabled" type="checkbox" defaultChecked={semantic.enabled} />
+                Enable provider-backed semantic search for this project
+              </label>
+              <label className="check-row">
+                <input
+                  name="allowPrivateAssets"
+                  type="checkbox"
+                  defaultChecked={semantic.allowPrivateAssets}
+                />
+                Allow private assets to be sent to the configured provider
+              </label>
+              <Field
+                label="Monthly spend ceiling (USD)"
+                hint="The worker stops before further provider operations once this ceiling is reached."
+              >
+                <input
+                  name="monthlyBudgetUsd"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={(semantic.monthlyBudgetMicroUsd / 1_000_000).toFixed(2)}
+                />
+              </Field>
+              <Field label="Maximum assets per indexing run">
+                <input
+                  name="maxAssetsPerRun"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  defaultValue={semantic.maxAssetsPerRun}
+                />
+              </Field>
+              <Field label="Indexing concurrency">
+                <input
+                  name="concurrency"
+                  type="number"
+                  min="1"
+                  max="16"
+                  defaultValue={semantic.concurrency}
+                />
+              </Field>
               <p>
-                Semantic search and workflow agents arrive in later phases and remain opt-in. Core
-                media management never requires an external AI provider.
+                This month: ${(semantic.monthlySpendMicroUsd / 1_000_000).toFixed(2)} · Active
+                index:{' '}
+                {semantic.activeIndex ? `${semantic.activeIndex.indexedAssets} assets` : 'none'}
               </p>
-            </div>
-          </div>
+              <div className="dialog-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={pending || !semantic.enabled}
+                  onClick={() => void reindex()}
+                >
+                  <RefreshCw size={16} /> Build candidate index
+                </button>
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />} Save
+                  AI settings
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       </div>
     </>

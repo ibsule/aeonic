@@ -4,8 +4,7 @@ import { before, describe, it } from 'node:test'
 import sharp from 'sharp'
 import { inspectPdf } from '../src/media/document-processor.js'
 import { ImageInspectionError, inspectImage } from '../src/media/image-inspector.js'
-import { MediaCommandError } from '../src/media/subprocess.js'
-import { runMediaCommand } from '../src/media/subprocess.js'
+import { MediaCommandError, runMediaCommand } from '../src/media/subprocess.js'
 import { inspectVideo } from '../src/media/video-processor.js'
 
 let boundedVideo: Buffer

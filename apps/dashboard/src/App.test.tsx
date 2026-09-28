@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import axe from 'axe-core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -88,11 +88,30 @@ function mockJourney(options: { setupRequired?: boolean; failJobs?: boolean } = 
           )
         : json({ items: [], nextCursor: null })
     if (path.endsWith('/storage')) return json(storage)
+    if (path.endsWith('/semantic/settings'))
+      return json({
+        deploymentEnabled: false,
+        providerConfigured: false,
+        enabled: false,
+        allowPrivateAssets: false,
+        monthlyBudgetMicroUsd: 0,
+        monthlySpendMicroUsd: 0,
+        maxAssetsPerRun: 100,
+        concurrency: 1,
+        provider: null,
+        visionModel: null,
+        embeddingModel: null,
+        dimensions: null,
+        activeIndex: null,
+      })
     throw new Error(`Unexpected request: ${path}`)
   })
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('primary operator journey', () => {
   it('completes first-run setup and reaches upload without command-line API calls', async () => {
@@ -123,5 +142,17 @@ describe('primary operator journey', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Check worker health and retry')
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('keeps optional AI controls explicit and accessible', async () => {
+    mockJourney()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Media library' })
+    await user.click(screen.getAllByRole('button', { name: 'Settings' })[0] as HTMLElement)
+    expect(await screen.findByText('Semantic search off')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Allow private assets/)).not.toBeChecked()
+    expect(screen.getByRole('button', { name: /Build candidate index/ })).toBeDisabled()
+    expect(await accessibilityViolations()).toEqual([])
   })
 })

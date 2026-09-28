@@ -1,6 +1,6 @@
 import {
-  setupRequestSchema,
   type SetupRequest,
+  setupRequestSchema,
   setupResultSchema,
   setupStatusSchema,
 } from '@aeonic/contracts'

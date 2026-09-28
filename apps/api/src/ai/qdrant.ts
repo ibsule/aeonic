@@ -1,5 +1,5 @@
-import type { VectorIndex, VectorPoint, VectorSearchHit } from './contracts.js'
 import { CircuitBreaker } from './circuit-breaker.js'
+import type { VectorIndex, VectorPoint, VectorSearchHit } from './contracts.js'
 
 type Fetch = typeof fetch
 

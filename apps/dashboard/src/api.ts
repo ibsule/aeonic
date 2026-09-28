@@ -3,13 +3,15 @@ import type {
   Asset,
   AssetList,
   AuditEventList,
-  CreatedApiKey,
   CreateDerivativeRequest,
+  CreatedApiKey,
   Derivative,
   JobList,
   Project,
   ProjectList,
   ProjectStorageOverview,
+  SemanticSearchResponse,
+  SemanticSearchSettings,
   SetupRequest,
   SetupResult,
   SetupStatus,
@@ -91,6 +93,42 @@ export const api = {
     }),
   assets: (organizationId: string, projectId: string, query = '') =>
     request<AssetList>(`${projectPath(organizationId, projectId)}/assets?limit=100${query}`),
+  search: (organizationId: string, projectId: string, query: string) =>
+    request<SemanticSearchResponse>(
+      `${projectPath(organizationId, projectId)}/search?query=${encodeURIComponent(query)}&limit=100`,
+    ),
+  semanticSettings: (organizationId: string, projectId: string) =>
+    request<SemanticSearchSettings>(`${projectPath(organizationId, projectId)}/semantic/settings`),
+  updateSemanticSettings: (
+    organizationId: string,
+    projectId: string,
+    input: {
+      enabled?: boolean
+      allowPrivateAssets?: boolean
+      monthlyBudgetMicroUsd?: number
+      maxAssetsPerRun?: number
+      concurrency?: number
+    },
+  ) =>
+    request<SemanticSearchSettings>(`${projectPath(organizationId, projectId)}/semantic/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  startSemanticReindex: (organizationId: string, projectId: string) =>
+    request(`${projectPath(organizationId, projectId)}/semantic/reindex`, {
+      method: 'POST',
+      body: '{}',
+    }),
+  setAssetAiExclusion: (
+    organizationId: string,
+    projectId: string,
+    publicId: string,
+    excluded: boolean,
+  ) =>
+    request<void>(`${projectPath(organizationId, projectId)}/assets/${publicId}/ai-exclusion`, {
+      method: 'PUT',
+      body: JSON.stringify({ excluded }),
+    }),
   asset: async (organizationId: string, projectId: string, publicId: string) => {
     const response = await fetch(`${projectPath(organizationId, projectId)}/assets/${publicId}`, {
       credentials: 'same-origin',

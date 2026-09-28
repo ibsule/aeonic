@@ -9,8 +9,8 @@ import { createAuth } from '../src/auth/auth.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
 import {
-  aiIndexRecords,
   aiIndexes,
+  aiIndexRecords,
   aiUsageLedger,
   assets,
   assetVersions,

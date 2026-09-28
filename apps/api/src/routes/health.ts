@@ -1,4 +1,4 @@
-import { serviceStatusSchema, type ServiceStatus } from '@aeonic/contracts'
+import { type ServiceStatus, serviceStatusSchema } from '@aeonic/contracts'
 import { type Request, type Response, Router } from 'express'
 import type { AppConfig } from '../config.js'
 import { sendProblem } from '../http/problem.js'

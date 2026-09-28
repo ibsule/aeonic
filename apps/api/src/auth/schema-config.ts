@@ -1,4 +1,4 @@
-import { betterAuth, type BetterAuthOptions } from 'better-auth'
+import { type BetterAuthOptions, betterAuth } from 'better-auth'
 import { v7 as uuidv7 } from 'uuid'
 import { createAuthPlugins } from './plugins.js'
 

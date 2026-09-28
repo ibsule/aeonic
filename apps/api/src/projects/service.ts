@@ -7,11 +7,11 @@ import type {
 import { and, eq, isNull } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import {
+  type OrganizationRole,
+  type ProjectAction,
   parseOrganizationRole,
   roleAllows,
   roleHasOrganizationWideProjectAccess,
-  type OrganizationRole,
-  type ProjectAction,
 } from '../authorization/policy.js'
 import type { DatabaseConnection } from '../db/database.js'
 import { auditEvents, member, projectMembers, projects } from '../db/schema.js'

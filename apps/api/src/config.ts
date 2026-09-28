@@ -110,7 +110,7 @@ const environmentSchema = z.object({
   QDRANT_URL: z.url().default('http://qdrant:6333'),
   QDRANT_API_KEY: z.string().min(1).optional(),
   QDRANT_API_KEY_FILE: z.string().trim().min(1).optional(),
-  AEONIC_VERSION: z.string().trim().min(1).default('0.6.0'),
+  AEONIC_VERSION: z.string().trim().min(1).default('0.7.0'),
 })
 
 export interface AppConfig {
@@ -359,19 +359,18 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       'Invalid configuration: WORKER_HEARTBEAT_MS must be less than half WORKER_LEASE_MS',
     )
   }
-  const aiProviderApiKey = readSecret(
-    'AI_PROVIDER_API_KEY',
-    value.AI_PROVIDER_API_KEY,
-    value.AI_PROVIDER_API_KEY_FILE,
-    value.NODE_ENV,
-  )
-  const qdrantApiKey = readSecret(
-    'QDRANT_API_KEY',
-    value.QDRANT_API_KEY,
-    value.QDRANT_API_KEY_FILE,
-    value.NODE_ENV,
-  )
   const aiEnabled = value.AI_ENABLED === 'true'
+  const aiProviderApiKey = aiEnabled
+    ? readSecret(
+        'AI_PROVIDER_API_KEY',
+        value.AI_PROVIDER_API_KEY,
+        value.AI_PROVIDER_API_KEY_FILE,
+        value.NODE_ENV,
+      )
+    : undefined
+  const qdrantApiKey = aiEnabled
+    ? readSecret('QDRANT_API_KEY', value.QDRANT_API_KEY, value.QDRANT_API_KEY_FILE, value.NODE_ENV)
+    : undefined
   if (
     aiEnabled &&
     (aiProviderApiKey === undefined ||

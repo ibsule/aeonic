@@ -13,8 +13,8 @@ import type { AppConfig } from '../config.js'
 import type { DatabaseConnection } from '../db/database.js'
 import {
   aiAssetExclusions,
-  aiIndexRecords,
   aiIndexes,
+  aiIndexRecords,
   aiProjectSettings,
   aiUsageLedger,
   assets,

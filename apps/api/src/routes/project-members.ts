@@ -1,13 +1,13 @@
 import {
-  assignProjectMemberRequestSchema,
   type AssignProjectMemberRequest,
+  assignProjectMemberRequestSchema,
   projectMemberListSchema,
   projectMemberSchema,
 } from '@aeonic/contracts'
 import { Router } from 'express'
 import type { AuthService } from '../auth/auth.js'
-import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { ApiError } from '../http/api-error.js'
+import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { matchesSchema, sendJson } from '../http/response.js'
 import type { ProjectMemberService } from '../projects/members.js'
 

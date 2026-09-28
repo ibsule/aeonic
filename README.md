@@ -155,6 +155,8 @@ of the runtime.
 
 ## Docker Compose
 
+The optional AI profile is documented in [Optional semantic search](docs/semantic-search.md). Core services do not require it.
+
 For a no-CLI-after-installation experience, follow [the Compose deployment guide](./docs/deployment.md).
 It covers secret generation, TLS, first-run setup, diagnostics, backup, and recovery. Review
 [the upgrade and rollback guide](./docs/upgrade.md) before changing versions.

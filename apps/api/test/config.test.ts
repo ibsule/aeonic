@@ -41,7 +41,7 @@ describe('configuration', () => {
     assert.equal(config.aiInputMicroUsdPerMillionUnits, 0)
     assert.equal(config.aiOutputMicroUsdPerMillionUnits, 0)
     assert.equal(config.qdrantUrl, 'http://qdrant:6333')
-    assert.equal(config.version, '0.6.0')
+    assert.equal(config.version, '0.7.0')
   })
 
   it('does not enable cross-origin access by default in production', () => {
@@ -169,6 +169,18 @@ describe('configuration', () => {
     assert.equal(config.aiVisionModel, 'vision-model-snapshot')
     assert.equal(config.aiEmbeddingModel, 'embedding-model-snapshot')
     assert.equal(config.aiEmbeddingDimensions, 768)
+  })
+
+  it('does not read optional AI secret files while AI is disabled', () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      AI_ENABLED: 'false',
+      AI_PROVIDER_API_KEY_FILE: '/missing/optional-provider-key',
+      QDRANT_API_KEY_FILE: '/missing/optional-qdrant-key',
+    })
+    assert.equal(config.aiEnabled, false)
+    assert.equal(config.aiProviderApiKey, undefined)
+    assert.equal(config.qdrantApiKey, undefined)
   })
 
   it('requires secret files for production AI credentials', () => {

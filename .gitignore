@@ -16,6 +16,7 @@ var/
 
 # User data — never commit
 data/
+secrets/
 
 # OS
 .DS_Store

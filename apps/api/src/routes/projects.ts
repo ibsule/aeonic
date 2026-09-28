@@ -1,17 +1,17 @@
 import {
-  createProjectRequestSchema,
   type CreateProjectRequest,
+  createProjectRequestSchema,
   projectListSchema,
   projectSchema,
-  updateProjectRequestSchema,
   type UpdateProjectRequest,
+  updateProjectRequestSchema,
 } from '@aeonic/contracts'
 import { type Request, type Response, Router } from 'express'
 import type { AuthService } from '../auth/auth.js'
-import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { ApiError } from '../http/api-error.js'
+import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { matchesSchema, sendJson } from '../http/response.js'
-import { projectEtag, type ProjectService } from '../projects/service.js'
+import { type ProjectService, projectEtag } from '../projects/service.js'
 
 function requireBody<T>(schema: object, body: unknown): T {
   if (!matchesSchema<T>(schema, body)) {

@@ -2,8 +2,8 @@ import type { AuditEventList } from '@aeonic/contracts'
 import { validate as isUuid } from 'uuid'
 import { roleAllows } from '../authorization/policy.js'
 import { ApiError } from '../http/api-error.js'
-import type { AuditRepository } from '../repositories/types.js'
 import type { ProjectService } from '../projects/service.js'
+import type { AuditRepository } from '../repositories/types.js'
 
 export interface ListAuditEventsOptions {
   projectId?: string

@@ -1,12 +1,12 @@
 import {
   aiIndexSchema,
+  type StartSemanticReindexRequest,
   semanticSearchResponseSchema,
   semanticSearchSettingsSchema,
-  type StartSemanticReindexRequest,
   startSemanticReindexRequestSchema,
   type UpdateAssetAiExclusionRequest,
-  updateAssetAiExclusionRequestSchema,
   type UpdateSemanticSearchSettingsRequest,
+  updateAssetAiExclusionRequestSchema,
   updateSemanticSearchSettingsRequestSchema,
 } from '@aeonic/contracts'
 import { type Request, Router } from 'express'

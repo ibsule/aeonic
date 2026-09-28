@@ -1,4 +1,4 @@
-import { assetSchema, type Asset } from './assets.js'
+import { type Asset, assetSchema } from './assets.js'
 
 export const aiIndexStates = ['building', 'evaluating', 'active', 'retired', 'failed'] as const
 export type AiIndexState = (typeof aiIndexStates)[number]

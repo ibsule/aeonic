@@ -717,6 +717,17 @@ h2 {
   gap: 18px;
   margin-top: 28px;
 }
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #4b5048;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.check-row input {
+  margin-top: 2px;
+}
 .field-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -839,6 +850,21 @@ h2 {
 }
 .toolbar .search-field {
   width: min(420px, 70vw);
+}
+.search-summary {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  color: #5f655c;
+  background: #f2f3ed;
+  border: 1px solid #dfe1d8;
+  border-radius: 8px;
+  font-size: 10px;
+}
+.search-summary strong {
+  color: #2d332b;
 }
 .secondary-button {
   display: inline-flex;

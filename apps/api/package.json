@@ -1,6 +1,6 @@
 {
   "name": "@aeonic/api",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,9 +11,11 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "auth:schema": "auth generate --config src/auth/schema-config.ts --output src/db/auth-schema.ts --adapter drizzle --dialect sqlite --yes",
     "dev": "tsx watch src/index.ts",
+    "dev:ai-worker": "tsx watch src/ai-worker.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "doctor": "node --enable-source-maps dist/doctor.js",
     "start": "node --enable-source-maps dist/index.js",
+    "start:ai-worker": "node --enable-source-maps dist/ai-worker.js",
     "start:worker": "node --enable-source-maps dist/worker.js",
     "test": "node --import tsx --test test/*.test.ts",
     "test:s3": "node --import tsx --test test/*s3*.integration.test.ts",

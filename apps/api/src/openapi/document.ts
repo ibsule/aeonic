@@ -1,12 +1,13 @@
 import {
+  aiIndexSchema,
   apiKeyListSchema,
   assetListSchema,
   assetSchema,
   assignProjectMemberRequestSchema,
   auditEventListSchema,
   createApiKeyRequestSchema,
-  createDerivativeRequestSchema,
   createDeliveryUrlRequestSchema,
+  createDerivativeRequestSchema,
   createdApiKeySchema,
   createProjectRequestSchema,
   createTransformPresetRequestSchema,
@@ -21,16 +22,21 @@ import {
   projectMemberSchema,
   projectSchema,
   projectStorageOverviewSchema,
+  semanticSearchResponseSchema,
+  semanticSearchSettingsSchema,
   serviceStatusSchema,
   setupRequestSchema,
   setupResultSchema,
   setupStatusSchema,
   simpleUploadResultSchema,
+  startSemanticReindexRequestSchema,
   storageFailureSummarySchema,
   transformPresetListSchema,
   transformPresetSchema,
+  updateAssetAiExclusionRequestSchema,
   updateAssetRequestSchema,
   updateProjectRequestSchema,
+  updateSemanticSearchSettingsRequestSchema,
   uploadQuerySchema,
 } from '@aeonic/contracts'
 import type { AppConfig } from '../config.js'
@@ -204,6 +210,10 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       {
         name: 'Derivatives',
         description: 'Durable asynchronous video and document processing.',
+      },
+      {
+        name: 'Semantic search',
+        description: 'Optional, budgeted, project-isolated hybrid media retrieval.',
       },
     ],
     paths: {
@@ -1176,6 +1186,108 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           },
         },
       },
+      [`${projectItemPath}/semantic/settings`]: {
+        get: {
+          operationId: 'getSemanticSearchSettings',
+          tags: ['Semantic search'],
+          summary: 'Inspect semantic-search availability, usage, and project controls',
+          security: projectReadSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          responses: {
+            '200': jsonResponse('Semantic-search settings.', 'SemanticSearchSettings'),
+            ...standardErrors,
+          },
+        },
+        patch: {
+          operationId: 'updateSemanticSearchSettings',
+          tags: ['Semantic search'],
+          summary: 'Update opt-in, privacy, budget, and indexing limits',
+          security: cookieSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          requestBody: jsonBody('UpdateSemanticSearchSettingsRequest'),
+          responses: {
+            '200': jsonResponse('Updated semantic-search settings.', 'SemanticSearchSettings'),
+            ...standardErrors,
+          },
+        },
+      },
+      [`${projectItemPath}/semantic/reindex`]: {
+        post: {
+          operationId: 'startSemanticReindex',
+          tags: ['Semantic search'],
+          summary: 'Build and evaluate a side-by-side candidate index',
+          security: cookieSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          requestBody: jsonBody('StartSemanticReindexRequest'),
+          responses: {
+            '202': jsonResponse('Candidate index queued.', 'AiIndex'),
+            ...standardErrors,
+          },
+        },
+      },
+      [`${projectItemPath}/search`]: {
+        get: {
+          operationId: 'searchProjectMedia',
+          tags: ['Semantic search'],
+          summary: 'Search media with local lexical and optional semantic retrieval',
+          security: projectReadSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            {
+              name: 'query',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', minLength: 1, maxLength: 500 },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            },
+          ],
+          responses: {
+            '200': jsonResponse('Ranked project media.', 'SemanticSearchResponse'),
+            ...standardErrors,
+          },
+        },
+      },
+      [`${assetItemPath}/ai-exclusion`]: {
+        put: {
+          operationId: 'setAssetAiExclusion',
+          tags: ['Semantic search'],
+          summary: 'Exclude or restore an asset for future AI indexing',
+          security: cookieSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId'), parameter('PublicId')],
+          requestBody: jsonBody('UpdateAssetAiExclusionRequest'),
+          responses: {
+            '204': { description: 'Exclusion updated and vector cleanup queued.' },
+            ...standardErrors,
+          },
+        },
+      },
+      [`${projectItemPath}/semantic/indexes/{indexId}`]: {
+        delete: {
+          operationId: 'deleteSemanticIndex',
+          tags: ['Semantic search'],
+          summary: 'Delete an index and queue vector collection cleanup',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            {
+              name: 'indexId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '204': { description: 'Index deleted and vector cleanup queued.' },
+            ...standardErrors,
+          },
+        },
+      },
     },
     components: {
       securitySchemes: {
@@ -1392,6 +1504,12 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         CreateTransformPresetVersionRequest: component(createTransformPresetVersionRequestSchema),
         TransformPreset: component(transformPresetSchema),
         TransformPresetList: component(transformPresetListSchema),
+        AiIndex: aiIndexSchema,
+        SemanticSearchSettings: component(semanticSearchSettingsSchema),
+        UpdateSemanticSearchSettingsRequest: component(updateSemanticSearchSettingsRequestSchema),
+        StartSemanticReindexRequest: startSemanticReindexRequestSchema,
+        UpdateAssetAiExclusionRequest: updateAssetAiExclusionRequestSchema,
+        SemanticSearchResponse: component(semanticSearchResponseSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

@@ -1,14 +1,14 @@
 import {
   apiKeyListSchema,
-  createApiKeyRequestSchema,
   type CreateApiKeyRequest,
+  createApiKeyRequestSchema,
   createdApiKeySchema,
 } from '@aeonic/contracts'
 import { Router } from 'express'
 import type { ApiKeyService } from '../api-keys/service.js'
 import type { AuthService } from '../auth/auth.js'
-import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { ApiError } from '../http/api-error.js'
+import { getUserPrincipal, requireUser } from '../http/authentication.js'
 import { matchesSchema, sendJson } from '../http/response.js'
 
 function parameter(value: string | string[] | undefined): string {

@@ -1,9 +1,9 @@
 import {
   type AssetState,
+  type AssetVisibility,
   assetListSchema,
   assetSchema,
   assetStates,
-  type AssetVisibility,
   type UpdateAssetRequest,
   updateAssetRequestSchema,
 } from '@aeonic/contracts'
