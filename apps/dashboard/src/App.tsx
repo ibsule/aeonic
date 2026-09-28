@@ -410,6 +410,16 @@ const manageNav: NavItem[] = [
   { page: 'audit' as const, label: 'Audit history', icon: History },
   { page: 'settings' as const, label: 'Settings', icon: Settings2 },
 ]
+const pageTitles: Record<Page, string> = {
+  overview: 'Overview',
+  assets: 'Media archive',
+  presets: 'Transform presets',
+  jobs: 'Processing queue',
+  keys: 'API access',
+  usage: 'Storage system',
+  audit: 'Audit history',
+  settings: 'Project settings',
+}
 function Nav({
   label,
   items,
@@ -427,7 +437,7 @@ function Nav({
     <nav aria-label={label}>
       <p className={secondary ? 'nav-label secondary-label' : 'nav-label'}>{label}</p>
       <ul className="nav-list">
-        {items.map(({ page: value, label: text, icon: Icon }) => (
+        {items.map(({ page: value, label: text, icon: Icon }, index) => (
           <li key={value}>
             <button
               type="button"
@@ -435,6 +445,9 @@ function Nav({
               aria-current={page === value ? 'page' : undefined}
               onClick={() => go(value)}
             >
+              <span className="nav-index" aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
               <Icon size={18} />
               <span>{text}</span>
             </button>
@@ -554,21 +567,25 @@ function Workspace({
           >
             <Menu />
           </button>
-          <label className="project-switcher">
-            <span className="project-dot" />
-            <span className="sr-only">Current project</span>
-            <select
-              value={scope.projectId}
-              onChange={(event) => setScope({ ...scope, projectId: event.target.value })}
-            >
-              {projects.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={15} />
-          </label>
+          <div className="topbar-context">
+            <label className="project-switcher">
+              <span className="project-dot" />
+              <span className="sr-only">Current project</span>
+              <select
+                value={scope.projectId}
+                onChange={(event) => setScope({ ...scope, projectId: event.target.value })}
+              >
+                {projects.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={15} />
+            </label>
+            <span className="topbar-divider" aria-hidden="true" />
+            <span className="topbar-page">{pageTitles[page]}</span>
+          </div>
           <div className="topbar-actions">
             <button
               className="icon-button"
@@ -638,27 +655,47 @@ function Content({
   if (page === 'audit') return <Audit scope={scope} />
   return <Settings scope={scope} project={project} />
 }
-function AssetRows({ items, select }: { items: Asset[]; select?: (item: Asset) => void }) {
+function AssetRows({
+  items,
+  select,
+  scope,
+  variant = 'compact',
+}: {
+  items: Asset[]
+  select?: (item: Asset) => void
+  scope?: Scope
+  variant?: 'compact' | 'archive' | 'explore'
+}) {
   return items.length ? (
-    <div className="asset-list">
-      {items.map((item) => (
-        <button className="asset-row" type="button" key={item.id} onClick={() => select?.(item)}>
-          <span className={`asset-preview ${item.mediaKind}`}>
-            <span>
-              {item.version?.mimeType?.split('/').at(-1)?.toUpperCase() ?? item.mediaKind}
+    <div className={`asset-list ${variant}`}>
+      {items.map((item, index) => {
+        const preview =
+          scope && item.mediaKind === 'image' && item.state === 'ready'
+            ? `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}/assets/${item.publicId}/versions/${item.currentVersion}/original`
+            : null
+        return (
+          <button className="asset-row" type="button" key={item.id} onClick={() => select?.(item)}>
+            <span className={`asset-preview ${item.mediaKind}`}>
+              {preview ? <img src={preview} alt="" loading="lazy" decoding="async" /> : null}
+              <span>
+                {item.version?.mimeType?.split('/').at(-1)?.toUpperCase() ?? item.mediaKind}
+              </span>
             </span>
-          </span>
-          <span className="asset-info">
-            <strong>{item.name}</strong>
-            <small>
-              {item.folder || 'Unfiled'} ·{' '}
-              {item.version?.sizeBytes ? bytes(item.version.sizeBytes) : item.state}
-            </small>
-          </span>
-          <span className={`privacy ${item.visibility}`}>{item.visibility}</span>
-          <time dateTime={item.createdAt}>{ago(item.createdAt)}</time>
-        </button>
-      ))}
+            <span className="asset-index" aria-hidden="true">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <span className="asset-info">
+              <strong>{item.name}</strong>
+              <small>
+                {item.folder || 'Unfiled'} ·{' '}
+                {item.version?.sizeBytes ? bytes(item.version.sizeBytes) : item.state}
+              </small>
+            </span>
+            <span className={`privacy ${item.visibility}`}>{item.visibility}</span>
+            <time dateTime={item.createdAt}>{ago(item.createdAt)}</time>
+          </button>
+        )
+      })}
     </div>
   ) : (
     <Empty
@@ -857,7 +894,7 @@ function Overview({
               <h2>Recent media</h2>
             </div>
           </div>
-          <AssetRows items={data.assets.slice(0, 5)} />
+          <AssetRows items={data.assets.slice(0, 5)} scope={scope} />
         </section>
         <section className="panel">
           <div className="panel-heading">
@@ -946,11 +983,16 @@ function Assets({ scope, openUpload }: { scope: Scope; openUpload: () => void })
           </span>
         </div>
       ) : null}
-      <section className="panel">
+      <section className={searchInfo ? 'panel search-stage' : 'panel library-stage'}>
         {loading ? (
           <Loading label="Loading assets" />
         ) : (
-          <AssetRows items={items} select={setSelected} />
+          <AssetRows
+            items={items}
+            select={setSelected}
+            scope={scope}
+            variant={searchInfo ? 'explore' : 'archive'}
+          />
         )}
       </section>
       {selected ? (
@@ -1079,125 +1121,138 @@ function AssetDrawer({
             <X />
           </button>
         </div>
-        {error ? <Notice>{error}</Notice> : null}
-        {derivativeMessage ? (
-          <div className="notice success-notice" role="status">
-            <Check aria-hidden="true" size={18} />
-            <p>{derivativeMessage}</p>
-          </div>
-        ) : null}
-        <div className={`asset-hero ${asset.mediaKind}`}>
-          <span>{asset.mediaKind}</span>
-        </div>
-        <dl className="metadata-grid">
-          <div>
-            <dt>Format</dt>
-            <dd>{asset.version?.mimeType ?? 'Processing'}</dd>
-          </div>
-          <div>
-            <dt>Size</dt>
-            <dd>{asset.version?.sizeBytes ? bytes(asset.version.sizeBytes) : '—'}</dd>
-          </div>
-          <div>
-            <dt>Dimensions</dt>
-            <dd>
-              {asset.version?.width && asset.version.height
-                ? `${asset.version.width} × ${asset.version.height}`
-                : '—'}
-            </dd>
-          </div>
-          <div>
-            <dt>State</dt>
-            <dd>{asset.state}</dd>
-          </div>
-        </dl>
-        <form className="form-stack" onSubmit={submit}>
-          <Field label="Display name">
-            <input name="name" required defaultValue={asset.name} />
-          </Field>
-          <Field label="Folder">
-            <input name="folder" defaultValue={asset.folder} />
-          </Field>
-          <Field label="Privacy">
-            <select name="visibility" defaultValue={asset.visibility}>
-              <option value="private">Private — authentication required</option>
-              <option value="public">Public — available by URL</option>
-            </select>
-          </Field>
-          <button className="primary-button wide" disabled={pending || !etag} type="submit">
-            {pending ? <LoaderCircle className="spin" /> : <Check />}Save changes
-          </button>
-        </form>
-        {asset.state === 'ready' && asset.mediaKind !== 'image' ? (
-          <section className="form-stack" aria-labelledby="derivative-actions-title">
-            <div>
-              <p className="eyebrow">Processing</p>
-              <h3 id="derivative-actions-title">Create a derivative</h3>
+        <div className="asset-control-room">
+          <section className="asset-stage" aria-label="Asset preview and technical metadata">
+            <div className={`asset-hero ${asset.mediaKind}`}>
+              {asset.mediaKind === 'image' && asset.state === 'ready' ? (
+                <img src={original} alt={asset.name} />
+              ) : null}
+              <span>{asset.mediaKind}</span>
             </div>
-            {asset.mediaKind === 'video' ? (
-              <>
-                <button
-                  className="secondary-button wide"
-                  disabled={pending}
-                  type="button"
-                  onClick={() => void queueDerivative({ operation: 'video_poster' })}
-                >
-                  Generate poster image
-                </button>
-                <button
-                  className="secondary-button wide"
-                  disabled={pending}
-                  type="button"
-                  onClick={() =>
-                    void queueDerivative({ operation: 'video_transcode', preset: 'mp4-720p' })
-                  }
-                >
-                  Transcode to MP4 720p
-                </button>
-              </>
-            ) : asset.version?.mimeType === 'application/pdf' ? (
-              <>
-                <button
-                  className="secondary-button wide"
-                  disabled={pending}
-                  type="button"
-                  onClick={() => void queueDerivative({ operation: 'pdf_thumbnail' })}
-                >
-                  Generate PDF thumbnail
-                </button>
-                <button
-                  className="secondary-button wide"
-                  disabled={pending}
-                  type="button"
-                  onClick={() => void queueDerivative({ operation: 'pdf_text' })}
-                >
-                  Extract searchable text
-                </button>
-              </>
-            ) : (
-              <button
-                className="secondary-button wide"
-                disabled={pending}
-                type="button"
-                onClick={() => void queueDerivative({ operation: 'office_preview' })}
-              >
-                Generate PDF preview
-              </button>
-            )}
+            <dl className="metadata-grid">
+              <div>
+                <dt>Format</dt>
+                <dd>{asset.version?.mimeType ?? 'Processing'}</dd>
+              </div>
+              <div>
+                <dt>Size</dt>
+                <dd>{asset.version?.sizeBytes ? bytes(asset.version.sizeBytes) : '—'}</dd>
+              </div>
+              <div>
+                <dt>Dimensions</dt>
+                <dd>
+                  {asset.version?.width && asset.version.height
+                    ? `${asset.version.width} × ${asset.version.height}`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>State</dt>
+                <dd>{asset.state}</dd>
+              </div>
+            </dl>
+            <a className="secondary-button wide" href={original} target="_blank" rel="noreferrer">
+              <ArrowUpRight />
+              Open original
+            </a>
           </section>
-        ) : null}
-        <a className="secondary-button wide" href={original} target="_blank" rel="noreferrer">
-          <ArrowUpRight />
-          Open original
-        </a>
-        <button
-          className="secondary-button wide"
-          type="button"
-          disabled={pending}
-          onClick={() => void excludeFromAi()}
-        >
-          <EyeOff /> Exclude from AI indexing
-        </button>
+          <div className="asset-inspector">
+            {error ? <Notice>{error}</Notice> : null}
+            {derivativeMessage ? (
+              <div className="notice success-notice" role="status">
+                <Check aria-hidden="true" size={18} />
+                <p>{derivativeMessage}</p>
+              </div>
+            ) : null}
+            <form className="form-stack" onSubmit={submit}>
+              <div>
+                <p className="eyebrow">Archive record</p>
+                <h3>Identity & access</h3>
+              </div>
+              <Field label="Display name">
+                <input name="name" required defaultValue={asset.name} />
+              </Field>
+              <Field label="Folder">
+                <input name="folder" defaultValue={asset.folder} />
+              </Field>
+              <Field label="Privacy">
+                <select name="visibility" defaultValue={asset.visibility}>
+                  <option value="private">Private — authentication required</option>
+                  <option value="public">Public — available by URL</option>
+                </select>
+              </Field>
+              <button className="primary-button wide" disabled={pending || !etag} type="submit">
+                {pending ? <LoaderCircle className="spin" /> : <Check />}Save changes
+              </button>
+            </form>
+            {asset.state === 'ready' && asset.mediaKind !== 'image' ? (
+              <section className="form-stack" aria-labelledby="derivative-actions-title">
+                <div>
+                  <p className="eyebrow">Processing</p>
+                  <h3 id="derivative-actions-title">Create a derivative</h3>
+                </div>
+                {asset.mediaKind === 'video' ? (
+                  <>
+                    <button
+                      className="secondary-button wide"
+                      disabled={pending}
+                      type="button"
+                      onClick={() => void queueDerivative({ operation: 'video_poster' })}
+                    >
+                      Generate poster image
+                    </button>
+                    <button
+                      className="secondary-button wide"
+                      disabled={pending}
+                      type="button"
+                      onClick={() =>
+                        void queueDerivative({ operation: 'video_transcode', preset: 'mp4-720p' })
+                      }
+                    >
+                      Transcode to MP4 720p
+                    </button>
+                  </>
+                ) : asset.version?.mimeType === 'application/pdf' ? (
+                  <>
+                    <button
+                      className="secondary-button wide"
+                      disabled={pending}
+                      type="button"
+                      onClick={() => void queueDerivative({ operation: 'pdf_thumbnail' })}
+                    >
+                      Generate PDF thumbnail
+                    </button>
+                    <button
+                      className="secondary-button wide"
+                      disabled={pending}
+                      type="button"
+                      onClick={() => void queueDerivative({ operation: 'pdf_text' })}
+                    >
+                      Extract searchable text
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="secondary-button wide"
+                    disabled={pending}
+                    type="button"
+                    onClick={() => void queueDerivative({ operation: 'office_preview' })}
+                  >
+                    Generate PDF preview
+                  </button>
+                )}
+              </section>
+            ) : null}
+            <button
+              className="secondary-button wide"
+              type="button"
+              disabled={pending}
+              onClick={() => void excludeFromAi()}
+            >
+              <EyeOff /> Exclude from AI indexing
+            </button>
+          </div>
+        </div>
       </aside>
     </div>
   )
