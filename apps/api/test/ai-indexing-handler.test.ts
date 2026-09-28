@@ -266,11 +266,33 @@ describe('AI indexing worker', () => {
     })
     assert.equal(vectors.ensured, true)
     assert.equal(vectors.points.length, 1)
+    assert.deepEqual(vectors.points[0]?.payload, {
+      organization_id: organizationId,
+      project_id: projectId,
+      asset_id: assetId,
+      asset_version_id: versionId,
+      content_kind: 'image',
+      chunk_ordinal: 0,
+      provider: 'fake',
+      embedding_model: 'embedding-snapshot',
+      embedding_dimensions: 3,
+      pipeline_version: 'semantic-v1',
+      prompt_version: 'media-caption-v1',
+      generated_by: 'ai',
+    })
     assert.equal(
       database.db.select().from(aiIndexes).where(eq(aiIndexes.id, indexId)).get()?.state,
       'active',
     )
-    assert.equal(database.db.select().from(aiIndexRecords).all().length, 1)
+    const records = database.db.select().from(aiIndexRecords).all()
+    assert.equal(records.length, 1)
+    assert.deepEqual(records[0]?.metadata, {
+      tags: ['bicycle', 'storefront'],
+      safety: {},
+      generatedBy: 'ai',
+      visionProvider: 'fake',
+      visionModel: 'embedding-snapshot',
+    })
     assert.equal(database.db.select().from(semanticEvaluations).get()?.approved, true)
     assert.equal(database.db.select().from(aiUsageLedger).all().length, 3)
     assert.equal(progress.at(-1), 100)

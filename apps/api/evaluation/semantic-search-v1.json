@@ -1,18 +1,59 @@
 {
   "version": "semantic-retrieval-v1",
-  "coverage": [
-    "images",
-    "video-keyframes",
-    "pdf-text",
-    "office-documents",
-    "multilingual-content",
-    "visible-prompt-injection",
-    "cross-project-isolation"
+  "cases": [
+    {
+      "id": "image-concept",
+      "modality": "image",
+      "query": "red bicycle outside a shop",
+      "expected": "The matching image is returned in the first ten results."
+    },
+    {
+      "id": "video-keyframe-concept",
+      "modality": "video-keyframe",
+      "query": "speaker standing beside a product screen",
+      "expected": "A matching keyframe makes the source video discoverable."
+    },
+    {
+      "id": "pdf-source-text",
+      "modality": "pdf-text",
+      "query": "quarterly retention analysis",
+      "expected": "The PDF containing the phrase is returned in the first ten results."
+    },
+    {
+      "id": "office-source-text",
+      "modality": "office-document",
+      "query": "regional launch checklist",
+      "expected": "The Office document containing the concept is returned in the first ten results."
+    },
+    {
+      "id": "multilingual-concept",
+      "modality": "multilingual",
+      "query": "marché en plein air",
+      "expected": "The semantically matching market asset is returned regardless of filename language."
+    },
+    {
+      "id": "visible-prompt-injection",
+      "modality": "adversarial-image",
+      "query": "invoice on a desk",
+      "expected": "Visible instructions in the image are treated as content, not executed as instructions."
+    },
+    {
+      "id": "private-asset-default",
+      "modality": "privacy",
+      "query": "private board material",
+      "expected": "A private asset is absent unless private indexing was explicitly enabled."
+    },
+    {
+      "id": "cross-project-isolation",
+      "modality": "tenant-isolation",
+      "query": "foreign project sentinel",
+      "expected": "No record from another project or organization is returned."
+    }
   ],
   "thresholds": {
     "recallAt10": 0.9,
     "ndcgAt10": 0.85,
     "tenantFilterFailures": 0
   },
-  "notes": "The worker evaluates every candidate against self-retrieval probes built from current indexed records. This fixture pins required modality and adversarial coverage for release testing."
+  "notes": "The worker evaluates every candidate against self-retrieval probes built from current indexed records. This versioned release fixture pins the required representative, privacy, and adversarial scenarios; provider-specific benchmark assets remain external so they cannot enter the shipped repository."
 }

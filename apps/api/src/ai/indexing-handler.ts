@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
 import { and, eq, gte, isNull, ne, sql } from 'drizzle-orm'
 import sharp from 'sharp'
-import { v5 as uuidv5, validate as isUuid, v7 as uuidv7 } from 'uuid'
+import { validate as isUuid, v5 as uuidv5, v7 as uuidv7 } from 'uuid'
 import type { AppConfig } from '../config.js'
 import type { DatabaseConnection } from '../db/database.js'
 import {
@@ -326,6 +326,12 @@ export class AiIndexingHandler {
           asset_version_id: target.assetVersionId,
           content_kind: representation.kind,
           chunk_ordinal: representation.ordinal,
+          provider: this.embeddings.provider,
+          embedding_model: this.embeddings.model,
+          embedding_dimensions: this.embeddings.dimensions,
+          pipeline_version: index.pipelineVersion,
+          prompt_version: index.promptVersion,
+          generated_by: 'ai',
         },
       })
       records.push({
@@ -339,7 +345,13 @@ export class AiIndexingHandler {
         chunkOrdinal: representation.ordinal,
         sourceText: representation.sourceText,
         caption: representation.caption,
-        metadata: representation.metadata,
+        metadata: {
+          ...representation.metadata,
+          generatedBy: representation.caption === null ? 'source' : 'ai',
+          ...(representation.caption === null
+            ? {}
+            : { visionProvider: this.vision.provider, visionModel: this.vision.model }),
+        },
         provider: this.embeddings.provider,
         model: this.embeddings.model,
         dimensions: this.embeddings.dimensions,
