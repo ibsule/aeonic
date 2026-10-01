@@ -8,7 +8,7 @@ import type {
 } from '@aeonic/contracts'
 import { v7 as uuidv7 } from 'uuid'
 import type { DatabaseConnection } from '../db/database.js'
-import { agentPlans, agentRuns, approvalRequests } from '../db/schema.js'
+import { agentPlans, agentRuns, approvalRequests, assets, assetVersions } from '../db/schema.js'
 import type { TenantScope } from '../repositories/types.js'
 import { hashAgentPlan } from './policy.js'
 
@@ -347,6 +347,7 @@ export class SqliteAgentWorkflowRepository {
           'The approved plan hash does not match the execution request.',
         )
       }
+      this.assertTargetsCurrent(scope, plan.targetSnapshot)
       const consumed = this.database.db
         .update(approvalRequests)
         .set({ state: 'consumed', consumedAt: now })
@@ -406,5 +407,50 @@ export class SqliteAgentWorkflowRepository {
           where organization_id = ? and project_id = ? and state = 'pending' and expires_at <= ?`,
       )
       .run(scope.organizationId, scope.projectId, now.getTime())
+  }
+
+  private assertTargetsCurrent(
+    scope: TenantScope,
+    snapshots: readonly AgentTargetSnapshot[],
+  ): void {
+    for (const snapshot of snapshots) {
+      const target = this.database.db
+        .select({
+          assetUpdatedAt: assets.updatedAt,
+          currentVersion: assets.currentVersion,
+          assetVersionId: assetVersions.id,
+          assetVersion: assetVersions.version,
+        })
+        .from(assets)
+        .innerJoin(
+          assetVersions,
+          and(
+            eq(assetVersions.assetId, assets.id),
+            eq(assetVersions.organizationId, assets.organizationId),
+            eq(assetVersions.projectId, assets.projectId),
+            eq(assetVersions.version, assets.currentVersion),
+          ),
+        )
+        .where(
+          and(
+            eq(assets.id, snapshot.assetId),
+            eq(assets.organizationId, scope.organizationId),
+            eq(assets.projectId, scope.projectId),
+          ),
+        )
+        .get()
+      if (
+        !target ||
+        target.assetVersionId !== snapshot.assetVersionId ||
+        target.assetVersion !== snapshot.assetVersion ||
+        target.currentVersion !== snapshot.assetVersion ||
+        target.assetUpdatedAt.toISOString() !== snapshot.assetUpdatedAt
+      ) {
+        throw new AgentWorkflowConflictError(
+          'target_snapshot_changed',
+          `Asset ${snapshot.assetId} changed after this plan was created.`,
+        )
+      }
+    }
   }
 }

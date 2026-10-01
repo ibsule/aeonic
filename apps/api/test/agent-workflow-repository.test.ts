@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import type { AgentPlanBudget, AgentTargetSnapshot, AgentToolCall } from '@aeonic/contracts'
+import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import {
   AgentWorkflowConflictError,
@@ -9,7 +10,7 @@ import {
 } from '../src/agents/repository.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
-import { organization, projects, user } from '../src/db/schema.js'
+import { assets, assetVersions, organization, projects, user } from '../src/db/schema.js'
 
 const databases: DatabaseConnection[] = []
 
@@ -58,6 +59,37 @@ function setup() {
       },
     ])
     .run()
+  const assetId = uuidv7()
+  const assetVersionId = uuidv7()
+  database.db
+    .insert(assets)
+    .values({
+      id: assetId,
+      organizationId,
+      projectId,
+      publicId: 'duplicate',
+      name: 'Duplicate',
+      mediaKind: 'image',
+      state: 'ready',
+      currentVersion: 1,
+      createdBy: userId,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run()
+  database.db
+    .insert(assetVersions)
+    .values({
+      id: assetVersionId,
+      organizationId,
+      projectId,
+      assetId,
+      version: 1,
+      state: 'ready',
+      createdBy: userId,
+      createdAt: now,
+    })
+    .run()
   return {
     database,
     repository: new SqliteAgentWorkflowRepository(database),
@@ -65,6 +97,8 @@ function setup() {
     userId,
     scope: { organizationId, projectId },
     otherScope: { organizationId: otherOrganizationId, projectId: otherProjectId },
+    assetId,
+    assetVersionId,
   }
 }
 
@@ -78,8 +112,11 @@ const budget: AgentPlanBudget = {
   maxRetries: 1,
 }
 
-function planParts(): { calls: AgentToolCall[]; targets: AgentTargetSnapshot[] } {
-  const assetId = uuidv7()
+function planParts(
+  assetId: string,
+  assetVersionId: string,
+  assetUpdatedAt = '2026-10-01T10:00:00.000Z',
+): { calls: AgentToolCall[]; targets: AgentTargetSnapshot[] } {
   return {
     calls: [
       {
@@ -93,9 +130,9 @@ function planParts(): { calls: AgentToolCall[]; targets: AgentTargetSnapshot[] }
     targets: [
       {
         assetId,
-        assetVersionId: uuidv7(),
+        assetVersionId,
         assetVersion: 1,
-        assetUpdatedAt: '2026-10-01T09:59:00.000Z',
+        assetUpdatedAt,
       },
     ],
   }
@@ -111,7 +148,7 @@ describe('durable agent approval workflow', () => {
       createdBy: test.userId,
       now: test.now,
     })
-    const parts = planParts()
+    const parts = planParts(test.assetId, test.assetVersionId)
     const frozen = test.repository.freezePlanAndRequestApproval({
       ...test.scope,
       runId: run.id,
@@ -198,7 +235,7 @@ describe('durable agent approval workflow', () => {
       riskClass: 'standard',
       reversibility: 'reversible',
       requiredRole: 'admin',
-      ...planParts(),
+      ...planParts(test.assetId, test.assetVersionId),
       budget,
       estimatedCostMicroUsd: 0,
       estimatedOutputBytes: 0,
@@ -220,5 +257,57 @@ describe('durable agent approval workflow', () => {
       (error: unknown) =>
         error instanceof AgentWorkflowConflictError && error.code === 'approval_not_pending',
     )
+  })
+
+  it('refuses execution when an approved target changed after review', () => {
+    const test = setup()
+    const run = test.repository.createRun({
+      ...test.scope,
+      request: 'Delete the selected duplicate.',
+      budget,
+      createdBy: test.userId,
+      now: test.now,
+    })
+    const frozen = test.repository.freezePlanAndRequestApproval({
+      ...test.scope,
+      runId: run.id,
+      plannerVersion: 'planner-v1',
+      summary: 'Delete one exact duplicate asset.',
+      riskClass: 'destructive',
+      reversibility: 'irreversible',
+      requiredRole: 'owner',
+      ...planParts(test.assetId, test.assetVersionId),
+      budget,
+      estimatedCostMicroUsd: 0,
+      estimatedOutputBytes: 0,
+      requestedBy: test.userId,
+      expiresAt: new Date(test.now.getTime() + 15 * 60_000),
+      now: test.now,
+    })
+    test.repository.decideApproval(
+      test.scope,
+      frozen.approval.id,
+      'approved',
+      { id: test.userId, role: 'owner' },
+      test.now,
+    )
+    test.database.db
+      .update(assets)
+      .set({ updatedAt: new Date(test.now.getTime() + 1) })
+      .where(eq(assets.id, test.assetId))
+      .run()
+
+    assert.throws(
+      () =>
+        test.repository.consumeApproval(
+          test.scope,
+          frozen.approval.id,
+          frozen.plan.planHash,
+          test.now,
+        ),
+      (error: unknown) =>
+        error instanceof AgentWorkflowConflictError && error.code === 'target_snapshot_changed',
+    )
+    assert.equal(test.repository.findRun(test.scope, run.id)?.state, 'awaiting_approval')
   })
 })
