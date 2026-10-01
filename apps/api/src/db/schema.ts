@@ -1,4 +1,9 @@
-import type { ImageTransformPlanV1 } from '@aeonic/contracts'
+import type {
+  AgentPlanBudget,
+  AgentTargetSnapshot,
+  AgentToolCall,
+  ImageTransformPlanV1,
+} from '@aeonic/contracts'
 import { sql } from 'drizzle-orm'
 import {
   check,
@@ -876,7 +881,7 @@ export const agentRuns = sqliteTable(
     request: text('request').notNull(),
     provider: text('provider'),
     model: text('model'),
-    budget: text('budget', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    budget: text('budget', { mode: 'json' }).$type<AgentPlanBudget>().notNull(),
     stepsUsed: integer('steps_used').notNull().default(0),
     tokensUsed: integer('tokens_used').notNull().default(0),
     costMicroUsd: integer('cost_micro_usd').notNull().default(0),
@@ -934,11 +939,11 @@ export const agentPlans = sqliteTable(
       enum: ['reversible', 'compensatable', 'irreversible'],
     }).notNull(),
     requiredRole: text('required_role', { enum: ['owner', 'admin'] }).notNull(),
-    toolCalls: text('tool_calls', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull(),
+    toolCalls: text('tool_calls', { mode: 'json' }).$type<AgentToolCall[]>().notNull(),
     targetSnapshot: text('target_snapshot', { mode: 'json' })
-      .$type<Record<string, unknown>[]>()
+      .$type<AgentTargetSnapshot[]>()
       .notNull(),
-    budget: text('budget', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    budget: text('budget', { mode: 'json' }).$type<AgentPlanBudget>().notNull(),
     estimatedCostMicroUsd: integer('estimated_cost_micro_usd').notNull().default(0),
     estimatedOutputBytes: integer('estimated_output_bytes').notNull().default(0),
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
