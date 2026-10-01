@@ -155,4 +155,20 @@ describe('primary operator journey', () => {
     expect(screen.getByRole('button', { name: /Build candidate index/ })).toBeDisabled()
     expect(await accessibilityViolations()).toEqual([])
   })
+
+  it('moves focus into and back out of the mobile navigation', async () => {
+    mockJourney()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Media library' })
+
+    const openNavigation = screen.getByRole('button', { name: 'Open navigation' })
+    await user.click(openNavigation)
+    expect(screen.getByRole('button', { name: 'Close navigation' })).toHaveFocus()
+    expect(openNavigation).toHaveAttribute('aria-expanded', 'true')
+
+    await user.keyboard('{Escape}')
+    expect(openNavigation).toHaveFocus()
+    expect(openNavigation).toHaveAttribute('aria-expanded', 'false')
+  })
 })

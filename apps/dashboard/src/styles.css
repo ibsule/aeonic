@@ -1535,12 +1535,17 @@ h3 {
     width: min(310px, 88vw);
     height: 100vh;
     padding: 20px;
+    visibility: hidden;
     transform: translateX(-105%);
-    transition: transform 200ms ease;
+    transition:
+      transform 200ms ease,
+      visibility 0s linear 200ms;
   }
   .sidebar.mobile-open {
+    visibility: visible;
     transform: translateX(0);
     box-shadow: 30px 0 80px rgba(0, 0, 0, 0.28);
+    transition-delay: 0s;
   }
   .mobile-close {
     display: grid;

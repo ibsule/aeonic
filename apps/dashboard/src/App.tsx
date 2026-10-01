@@ -475,6 +475,9 @@ function Workspace({
   const [mobile, setMobile] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const mobileMenuRef = useRef<HTMLButtonElement>(null)
+  const mobileCloseRef = useRef<HTMLButtonElement>(null)
+  const mobileWasOpen = useRef(false)
   const boot = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -496,6 +499,17 @@ function Workspace({
   useEffect(() => {
     void boot()
   }, [boot])
+  useEffect(() => {
+    if (mobile) {
+      mobileWasOpen.current = true
+      mobileCloseRef.current?.focus()
+      return
+    }
+    if (mobileWasOpen.current) {
+      mobileWasOpen.current = false
+      mobileMenuRef.current?.focus()
+    }
+  }, [mobile])
   if (loading) return <Loading />
   const project = projects.find((item) => item.id === scope?.projectId)
   if (error || !scope || !project)
@@ -513,11 +527,19 @@ function Workspace({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className={mobile ? 'sidebar mobile-open' : 'sidebar'} aria-label="Primary navigation">
+      <aside
+        id="primary-navigation"
+        className={mobile ? 'sidebar mobile-open' : 'sidebar'}
+        aria-label="Primary navigation"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setMobile(false)
+        }}
+      >
         <div className="brand">
           <span className="brand-mark">A</span>
           <span>Aeonic</span>
           <button
+            ref={mobileCloseRef}
             className="mobile-close"
             type="button"
             onClick={() => setMobile(false)}
@@ -560,10 +582,13 @@ function Workspace({
       <div className="workspace">
         <header className="topbar">
           <button
+            ref={mobileMenuRef}
             className="mobile-menu"
             type="button"
             onClick={() => setMobile(true)}
             aria-label="Open navigation"
+            aria-controls="primary-navigation"
+            aria-expanded={mobile}
           >
             <Menu />
           </button>
