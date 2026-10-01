@@ -94,7 +94,7 @@ export class AgentWorkflowService {
   listApprovals(actorId: string, scope: TenantScope, now = new Date()): AgentApprovalInbox {
     this.authorize(actorId, scope)
     return {
-      items: this.repository.listPendingApprovals(scope, now).map((approval) => {
+      items: this.repository.listActionableApprovals(scope, now).map((approval) => {
         const plan = this.repository.findPlan(scope, approval.planId)
         const run = plan ? this.repository.findRun(scope, plan.runId) : null
         if (!plan || !run) throw new Error('Approval references an unavailable plan or run.')

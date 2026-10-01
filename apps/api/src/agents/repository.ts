@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, or } from 'drizzle-orm'
 import type {
   AgentPlanBudget,
   AgentRiskClass,
@@ -307,7 +307,7 @@ export class SqliteAgentWorkflowRepository {
     return plan
   }
 
-  listPendingApprovals(scope: TenantScope, now: Date): readonly ApprovalRequestRecord[] {
+  listActionableApprovals(scope: TenantScope, now: Date): readonly ApprovalRequestRecord[] {
     this.expirePending(scope, now)
     return this.database.db
       .select()
@@ -316,7 +316,7 @@ export class SqliteAgentWorkflowRepository {
         and(
           eq(approvalRequests.organizationId, scope.organizationId),
           eq(approvalRequests.projectId, scope.projectId),
-          eq(approvalRequests.state, 'pending'),
+          or(eq(approvalRequests.state, 'pending'), eq(approvalRequests.state, 'approved')),
         ),
       )
       .orderBy(asc(approvalRequests.createdAt), asc(approvalRequests.id))

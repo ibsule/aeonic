@@ -8,6 +8,11 @@ const ids = {
   organization: '0199a100-0000-7000-8000-000000000001',
   project: '0199a100-0000-7000-8000-000000000002',
   user: '0199a100-0000-7000-8000-000000000003',
+  asset: '0199a100-0000-7000-8000-000000000004',
+  version: '0199a100-0000-7000-8000-000000000005',
+  run: '0199a100-0000-7000-8000-000000000006',
+  plan: '0199a100-0000-7000-8000-000000000007',
+  approval: '0199a100-0000-7000-8000-000000000008',
 }
 const session = {
   session: { id: 'session-1' },
@@ -44,6 +49,7 @@ async function accessibilityViolations() {
 function mockJourney(options: { setupRequired?: boolean; failJobs?: boolean } = {}) {
   let setupRequired = options.setupRequired ?? false
   let active = !setupRequired
+  let approvalState: 'pending' | 'approved' | 'consumed' = 'pending'
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const path = String(input)
     if (path === '/api/v1/setup' && (!init?.method || init.method === 'GET'))
@@ -104,6 +110,102 @@ function mockJourney(options: { setupRequired?: boolean; failJobs?: boolean } = 
         dimensions: null,
         activeIndex: null,
       })
+    if (path.endsWith('/agent-approvals') && (!init?.method || init.method === 'GET'))
+      return json({
+        items:
+          approvalState === 'consumed'
+            ? []
+            : [
+                {
+                  approval: {
+                    id: ids.approval,
+                    planId: ids.plan,
+                    planHash: 'a'.repeat(64),
+                    state: approvalState,
+                    requestedBy: ids.user,
+                    decidedBy: approvalState === 'approved' ? ids.user : null,
+                    decisionReason: null,
+                    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+                    createdAt: new Date().toISOString(),
+                    decidedAt: approvalState === 'approved' ? new Date().toISOString() : null,
+                    consumedAt: null,
+                  },
+                  plan: {
+                    id: ids.plan,
+                    runId: ids.run,
+                    organizationId: ids.organization,
+                    projectId: ids.project,
+                    hash: 'a'.repeat(64),
+                    summary: 'Delete one reviewed duplicate',
+                    riskClass: 'destructive',
+                    reversibility: 'irreversible',
+                    requiredRole: 'owner',
+                    calls: [
+                      {
+                        id: 'step_1',
+                        tool: 'assets.delete',
+                        arguments: { assetId: ids.asset },
+                        expectedEffect: 'Delete the reviewed duplicate.',
+                        targetIds: [ids.asset],
+                      },
+                    ],
+                    targets: [
+                      {
+                        assetId: ids.asset,
+                        assetVersionId: ids.version,
+                        assetVersion: 1,
+                        assetUpdatedAt: new Date().toISOString(),
+                      },
+                    ],
+                    budget: {
+                      maxSteps: 1,
+                      maxWallTimeMs: 60000,
+                      maxTokens: 1000,
+                      maxCostMicroUsd: 1000,
+                      maxAssets: 1,
+                      maxOutputBytes: 0,
+                      maxRetries: 1,
+                    },
+                    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+                    createdAt: new Date().toISOString(),
+                  },
+                  run: {
+                    id: ids.run,
+                    organizationId: ids.organization,
+                    projectId: ids.project,
+                    state: 'awaiting_approval',
+                    request: 'Remove the exact duplicate after review.',
+                    provider: null,
+                    model: null,
+                    budget: {
+                      maxSteps: 1,
+                      maxWallTimeMs: 60000,
+                      maxTokens: 1000,
+                      maxCostMicroUsd: 1000,
+                      maxAssets: 1,
+                      maxOutputBytes: 0,
+                      maxRetries: 1,
+                    },
+                    stepsUsed: 0,
+                    tokensUsed: 0,
+                    costMicroUsd: 0,
+                    createdBy: ids.user,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    completedAt: null,
+                    cancelledAt: null,
+                  },
+                },
+              ],
+      })
+    if (path.endsWith(`/agent-approvals/${ids.approval}/decision`)) {
+      approvalState = 'approved'
+      return json({ state: approvalState })
+    }
+    if (path.endsWith(`/agent-approvals/${ids.approval}/execute`)) {
+      approvalState = 'consumed'
+      return json({ state: 'executing' }, 202)
+    }
     throw new Error(`Unexpected request: ${path}`)
   })
 }
@@ -170,5 +272,24 @@ describe('primary operator journey', () => {
     await user.keyboard('{Escape}')
     expect(openNavigation).toHaveFocus()
     expect(openNavigation).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('requires exact-target review before approving and queueing an agent plan', async () => {
+    mockJourney()
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Media library' })
+    await user.click(screen.getByRole('button', { name: 'Approvals' }))
+
+    expect(await screen.findByText('Delete one reviewed duplicate')).toBeInTheDocument()
+    const approve = screen.getByRole('button', { name: /Approve exact plan/ })
+    expect(approve).toBeDisabled()
+    await user.click(screen.getByLabelText(/I reviewed the exact targets/))
+    expect(approve).toBeEnabled()
+    await user.click(approve)
+    const execute = await screen.findByRole('button', { name: /Queue approved workflow/ })
+    await user.click(execute)
+    expect(await screen.findByText('No approvals waiting')).toBeInTheDocument()
+    expect(await accessibilityViolations()).toEqual([])
   })
 })

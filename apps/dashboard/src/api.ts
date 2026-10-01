@@ -1,4 +1,6 @@
 import type {
+  AgentApprovalInbox,
+  AgentRun,
   ApiKeyList,
   Asset,
   AssetList,
@@ -209,5 +211,28 @@ export const api = {
   audit: (organizationId: string, projectId: string) =>
     request<AuditEventList>(
       `/api/v1/organizations/${organizationId}/audit-events?projectId=${projectId}&limit=100`,
+    ),
+  agentApprovals: (organizationId: string, projectId: string) =>
+    request<AgentApprovalInbox>(`${projectPath(organizationId, projectId)}/agent-approvals`),
+  decideAgentApproval: (
+    organizationId: string,
+    projectId: string,
+    approvalId: string,
+    decision: 'approved' | 'rejected',
+    reason?: string,
+  ) =>
+    request(`${projectPath(organizationId, projectId)}/agent-approvals/${approvalId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, ...(reason ? { reason } : {}) }),
+    }),
+  executeAgentApproval: (
+    organizationId: string,
+    projectId: string,
+    approvalId: string,
+    planHash: string,
+  ) =>
+    request<AgentRun>(
+      `${projectPath(organizationId, projectId)}/agent-approvals/${approvalId}/execute`,
+      { method: 'POST', body: JSON.stringify({ planHash }) },
     ),
 }

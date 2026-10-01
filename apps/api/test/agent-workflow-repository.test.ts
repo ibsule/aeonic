@@ -178,7 +178,7 @@ describe('durable agent approval workflow', () => {
 
     assert.equal(calculateStoredPlanHash(frozen.plan), frozen.plan.planHash)
     assert.equal(test.repository.findPlan(test.otherScope, frozen.plan.id), null)
-    assert.equal(test.repository.listPendingApprovals(test.scope, test.now).length, 1)
+    assert.equal(test.repository.listActionableApprovals(test.scope, test.now).length, 1)
     assert.throws(
       () =>
         test.repository.decideApproval(
@@ -274,7 +274,7 @@ describe('durable agent approval workflow', () => {
       now: test.now,
     })
     const later = new Date(test.now.getTime() + 1_001)
-    assert.deepEqual(test.repository.listPendingApprovals(test.scope, later), [])
+    assert.deepEqual(test.repository.listActionableApprovals(test.scope, later), [])
     assert.throws(
       () =>
         test.repository.decideApproval(

@@ -1,4 +1,5 @@
 import type {
+  AgentApprovalInboxItem,
   ApiKey,
   Asset,
   AuditEvent,
@@ -35,6 +36,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  ShieldCheck,
   SlidersHorizontal,
   Upload,
   X,
@@ -50,7 +52,16 @@ import {
 } from 'react'
 import { api, type Session } from './api'
 
-type Page = 'overview' | 'assets' | 'presets' | 'jobs' | 'keys' | 'usage' | 'audit' | 'settings'
+type Page =
+  | 'overview'
+  | 'assets'
+  | 'presets'
+  | 'jobs'
+  | 'approvals'
+  | 'keys'
+  | 'usage'
+  | 'audit'
+  | 'settings'
 type Scope = { organizationId: string; projectId: string }
 const msg = (error: unknown) =>
   error instanceof Error ? error.message : 'Something went wrong. Please try again.'
@@ -403,6 +414,7 @@ const workspaceNav: NavItem[] = [
   { page: 'assets' as const, label: 'Assets', icon: Files },
   { page: 'presets' as const, label: 'Presets', icon: SlidersHorizontal },
   { page: 'jobs' as const, label: 'Jobs', icon: Activity },
+  { page: 'approvals' as const, label: 'Approvals', icon: ShieldCheck },
 ]
 const manageNav: NavItem[] = [
   { page: 'keys' as const, label: 'API keys', icon: KeyRound },
@@ -415,6 +427,7 @@ const pageTitles: Record<Page, string> = {
   assets: 'Media archive',
   presets: 'Transform presets',
   jobs: 'Processing queue',
+  approvals: 'Agent approvals',
   keys: 'API access',
   usage: 'Storage system',
   audit: 'Audit history',
@@ -675,6 +688,7 @@ function Content({
   if (page === 'assets') return <Assets scope={scope} openUpload={openUpload} />
   if (page === 'presets') return <Presets scope={scope} />
   if (page === 'jobs') return <Jobs scope={scope} />
+  if (page === 'approvals') return <Approvals scope={scope} />
   if (page === 'keys') return <Keys scope={scope} />
   if (page === 'usage') return <Usage scope={scope} />
   if (page === 'audit') return <Audit scope={scope} />
@@ -1542,6 +1556,204 @@ function Jobs({ scope }: { scope: Scope }) {
       <section className="panel">
         <JobRows items={items} />
       </section>
+    </>
+  )
+}
+function Approvals({ scope }: { scope: Scope }) {
+  const [items, setItems] = useState<AgentApprovalInboxItem[]>([])
+  const [reviewed, setReviewed] = useState<Set<string>>(() => new Set())
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const load = useCallback(async () => {
+    setError('')
+    try {
+      const result = await api.agentApprovals(scope.organizationId, scope.projectId)
+      setItems(result.items)
+    } catch (caught) {
+      setError(msg(caught))
+    }
+  }, [scope])
+  useEffect(() => {
+    void load()
+  }, [load])
+  async function decide(item: AgentApprovalInboxItem, decision: 'approved' | 'rejected') {
+    setBusy(item.approval.id)
+    setError('')
+    try {
+      await api.decideAgentApproval(
+        scope.organizationId,
+        scope.projectId,
+        item.approval.id,
+        decision,
+        decision === 'approved'
+          ? 'Exact targets and effects reviewed in the operator inbox.'
+          : undefined,
+      )
+      await load()
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setBusy('')
+    }
+  }
+  async function execute(item: AgentApprovalInboxItem) {
+    setBusy(item.approval.id)
+    setError('')
+    try {
+      await api.executeAgentApproval(
+        scope.organizationId,
+        scope.projectId,
+        item.approval.id,
+        item.plan.hash,
+      )
+      await load()
+    } catch (caught) {
+      setError(msg(caught))
+    } finally {
+      setBusy('')
+    }
+  }
+  return (
+    <>
+      <Header
+        eyebrow="Human control plane"
+        title="Agent approvals"
+        intro="Review frozen effects, exact asset versions, budgets, and risk before any workflow can mutate the library."
+        action={
+          <button className="secondary-button" type="button" onClick={() => void load()}>
+            <RefreshCw /> Refresh
+          </button>
+        }
+      />
+      {error ? <Notice retry={() => void load()}>{error}</Notice> : null}
+      <div className="approval-list">
+        {items.length ? (
+          items.map((item) => {
+            const isReviewed = reviewed.has(item.approval.id)
+            const isBusy = busy === item.approval.id
+            return (
+              <article className="approval-card" key={item.approval.id}>
+                <header>
+                  <div>
+                    <p className="eyebrow">{item.plan.riskClass} risk</p>
+                    <h2>{item.plan.summary}</h2>
+                    <p>{item.run.request}</p>
+                  </div>
+                  <span className={`approval-state ${item.approval.state}`}>
+                    {item.approval.state.replaceAll('_', ' ')}
+                  </span>
+                </header>
+                <dl className="approval-facts">
+                  <div>
+                    <dt>Plan hash</dt>
+                    <dd title={item.plan.hash}>{item.plan.hash.slice(0, 16)}…</dd>
+                  </div>
+                  <div>
+                    <dt>Required role</dt>
+                    <dd>{item.plan.requiredRole}</dd>
+                  </div>
+                  <div>
+                    <dt>Reversibility</dt>
+                    <dd>{item.plan.reversibility}</dd>
+                  </div>
+                  <div>
+                    <dt>Expires</dt>
+                    <dd>{new Date(item.approval.expiresAt).toLocaleString()}</dd>
+                  </div>
+                </dl>
+                <section className="approval-section">
+                  <h3>Exact targets</h3>
+                  {item.plan.targets.map((target) => (
+                    <div className="approval-target" key={target.assetId}>
+                      <code>{target.assetId}</code>
+                      <span>Version {target.assetVersion}</span>
+                      <small>Snapshot {new Date(target.assetUpdatedAt).toLocaleString()}</small>
+                    </div>
+                  ))}
+                </section>
+                <section className="approval-section">
+                  <h3>Planned effects</h3>
+                  {item.plan.calls.map((call, index) => (
+                    <div className="approval-call" key={call.id}>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <div>
+                        <code>{call.tool}</code>
+                        <p>{call.expectedEffect}</p>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+                <footer>
+                  {item.approval.state === 'pending' ? (
+                    <>
+                      <label className="review-check">
+                        <input
+                          type="checkbox"
+                          checked={isReviewed}
+                          onChange={(event) =>
+                            setReviewed((current) => {
+                              const next = new Set(current)
+                              if (event.target.checked) next.add(item.approval.id)
+                              else next.delete(item.approval.id)
+                              return next
+                            })
+                          }
+                        />
+                        I reviewed the exact targets and effects above.
+                      </label>
+                      <div className="approval-actions">
+                        <button
+                          className="danger-text"
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void decide(item, 'rejected')}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          disabled={!isReviewed || isBusy}
+                          onClick={() => void decide(item, 'approved')}
+                        >
+                          <ShieldCheck size={16} /> Approve exact plan
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="approved-execution">
+                      <p>
+                        Approval is frozen to the hash above. Targets will be rechecked on start.
+                      </p>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void execute(item)}
+                      >
+                        {isBusy ? (
+                          <LoaderCircle className="spin" size={16} />
+                        ) : (
+                          <Activity size={16} />
+                        )}
+                        Queue approved workflow
+                      </button>
+                    </div>
+                  )}
+                </footer>
+              </article>
+            )
+          })
+        ) : (
+          <section className="panel">
+            <Empty
+              icon={<ShieldCheck />}
+              title="No approvals waiting"
+              copy="Agent plans that need a human decision will appear here."
+            />
+          </section>
+        )}
+      </div>
     </>
   )
 }
