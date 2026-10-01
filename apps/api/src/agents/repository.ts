@@ -14,6 +14,7 @@ import {
   approvalRequests,
   assets,
   assetVersions,
+  auditEvents,
   toolExecutions,
 } from '../db/schema.js'
 import type { TenantScope } from '../repositories/types.js'
@@ -40,6 +41,7 @@ export interface CreateAgentRunInput extends TenantScope {
   readonly model?: string
   readonly budget: AgentPlanBudget
   readonly createdBy: string
+  readonly requestId: string
   readonly now: Date
 }
 
@@ -56,6 +58,7 @@ export interface FreezeAgentPlanInput extends TenantScope {
   readonly estimatedCostMicroUsd: number
   readonly estimatedOutputBytes: number
   readonly requestedBy: string
+  readonly requestId: string
   readonly expiresAt: Date
   readonly now: Date
 }
@@ -131,21 +134,39 @@ export class SqliteAgentWorkflowRepository {
   createRun(input: CreateAgentRunInput): AgentRunRecord {
     if (input.request.trim() === '') throw new TypeError('Agent requests cannot be empty.')
     const id = uuidv7()
-    this.database.db
-      .insert(agentRuns)
-      .values({
-        id,
-        organizationId: input.organizationId,
-        projectId: input.projectId,
-        request: input.request,
-        provider: input.provider,
-        model: input.model,
-        budget: input.budget,
-        createdBy: input.createdBy,
-        createdAt: input.now,
-        updatedAt: input.now,
-      })
-      .run()
+    this.database.db.transaction((transaction) => {
+      transaction
+        .insert(agentRuns)
+        .values({
+          id,
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          request: input.request,
+          provider: input.provider,
+          model: input.model,
+          budget: input.budget,
+          createdBy: input.createdBy,
+          createdAt: input.now,
+          updatedAt: input.now,
+        })
+        .run()
+      transaction
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          actorType: 'user',
+          actorId: input.createdBy,
+          action: 'agent.run_created',
+          targetType: 'agent_run',
+          targetId: id,
+          requestId: input.requestId,
+          summary: { request: input.request },
+          createdAt: input.now,
+        })
+        .run()
+    })
     return this.database.db
       .select()
       .from(agentRuns)
@@ -220,6 +241,27 @@ export class SqliteAgentWorkflowRepository {
           'The agent run changed while freezing its plan.',
         )
       }
+      this.database.db
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: input.organizationId,
+          projectId: input.projectId,
+          actorType: 'user',
+          actorId: input.requestedBy,
+          action: 'agent.approval_requested',
+          targetType: 'agent_plan',
+          targetId: planId,
+          requestId: input.requestId,
+          summary: {
+            approvalId,
+            planHash,
+            riskClass: input.riskClass,
+            targetIds: input.targets.map((target) => target.assetId),
+          },
+          createdAt: input.now,
+        })
+        .run()
       return {
         plan: this.database.db.select().from(agentPlans).where(eq(agentPlans.id, planId)).get(),
         approval: this.database.db
@@ -288,6 +330,7 @@ export class SqliteAgentWorkflowRepository {
     actor: { id: string; role: 'owner' | 'admin' },
     now: Date,
     reason?: string,
+    requestId = 'agent-internal',
   ): ApprovalRequestRecord {
     const transaction = this.database.client.transaction(() => {
       this.expirePending(scope, now)
@@ -328,6 +371,22 @@ export class SqliteAgentWorkflowRepository {
           ),
         )
         .run()
+      this.database.db
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          actorType: 'user',
+          actorId: actor.id,
+          action: `agent.approval_${decision}`,
+          targetType: 'approval_request',
+          targetId: approvalId,
+          requestId,
+          summary: { planId: plan.id, planHash: plan.planHash, reason: reason?.trim() || null },
+          createdAt: now,
+        })
+        .run()
       return this.findApproval(scope, approvalId)
     })
     return transaction.immediate() as ApprovalRequestRecord
@@ -338,6 +397,8 @@ export class SqliteAgentWorkflowRepository {
     approvalId: string,
     expectedPlanHash: string,
     now: Date,
+    actorId = 'system',
+    requestId = 'agent-internal',
   ): FrozenAgentPlan {
     const transaction = this.database.client.transaction(() => {
       const approval = this.findApproval(scope, approvalId)
@@ -403,6 +464,26 @@ export class SqliteAgentWorkflowRepository {
           })
           .run()
       }
+      this.database.db
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          actorType: actorId === 'system' ? 'system' : 'user',
+          actorId: actorId === 'system' ? null : actorId,
+          action: 'agent.approval_consumed',
+          targetType: 'agent_plan',
+          targetId: plan.id,
+          requestId,
+          summary: {
+            approvalId,
+            planHash: plan.planHash,
+            callIds: plan.toolCalls.map((call) => call.id),
+          },
+          createdAt: now,
+        })
+        .run()
       return { plan, approval: this.findApproval(scope, approvalId) }
     })
     return transaction.immediate() as FrozenAgentPlan

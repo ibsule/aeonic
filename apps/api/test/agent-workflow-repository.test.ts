@@ -13,6 +13,7 @@ import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
 import {
   assets,
   assetVersions,
+  auditEvents,
   organization,
   projects,
   toolExecutions,
@@ -153,6 +154,7 @@ describe('durable agent approval workflow', () => {
       request: 'Delete the selected duplicate.',
       budget,
       createdBy: test.userId,
+      requestId: 'request-create-1',
       now: test.now,
     })
     const parts = planParts(test.assetId, test.assetVersionId)
@@ -169,6 +171,7 @@ describe('durable agent approval workflow', () => {
       estimatedCostMicroUsd: 0,
       estimatedOutputBytes: 0,
       requestedBy: test.userId,
+      requestId: 'request-plan-1',
       expiresAt: new Date(test.now.getTime() + 15 * 60_000),
       now: test.now,
     })
@@ -217,6 +220,19 @@ describe('durable agent approval workflow', () => {
     assert.equal(executions[0]?.callId, 'step_1')
     assert.equal(executions[0]?.toolName, 'assets.delete')
     assert.match(executions[0]?.idempotencyKey ?? '', /^[0-9a-f]{64}$/)
+    assert.deepEqual(
+      test.database.db
+        .select({ action: auditEvents.action })
+        .from(auditEvents)
+        .all()
+        .map((event) => event.action),
+      [
+        'agent.run_created',
+        'agent.approval_requested',
+        'agent.approval_approved',
+        'agent.approval_consumed',
+      ],
+    )
     assert.throws(
       () =>
         test.repository.consumeApproval(
@@ -237,6 +253,7 @@ describe('durable agent approval workflow', () => {
       request: 'Update selected assets.',
       budget,
       createdBy: test.userId,
+      requestId: 'request-create-2',
       now: test.now,
     })
     const frozen = test.repository.freezePlanAndRequestApproval({
@@ -252,6 +269,7 @@ describe('durable agent approval workflow', () => {
       estimatedCostMicroUsd: 0,
       estimatedOutputBytes: 0,
       requestedBy: test.userId,
+      requestId: 'request-plan-2',
       expiresAt: new Date(test.now.getTime() + 1_000),
       now: test.now,
     })
@@ -278,6 +296,7 @@ describe('durable agent approval workflow', () => {
       request: 'Delete the selected duplicate.',
       budget,
       createdBy: test.userId,
+      requestId: 'request-create-3',
       now: test.now,
     })
     const frozen = test.repository.freezePlanAndRequestApproval({
@@ -293,6 +312,7 @@ describe('durable agent approval workflow', () => {
       estimatedCostMicroUsd: 0,
       estimatedOutputBytes: 0,
       requestedBy: test.userId,
+      requestId: 'request-plan-3',
       expiresAt: new Date(test.now.getTime() + 15 * 60_000),
       now: test.now,
     })
