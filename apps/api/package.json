@@ -16,6 +16,7 @@
     "doctor": "node --enable-source-maps dist/doctor.js",
     "start": "node --enable-source-maps dist/index.js",
     "start:ai-worker": "node --enable-source-maps dist/ai-worker.js",
+    "start:mcp": "node --enable-source-maps dist/mcp.js",
     "start:worker": "node --enable-source-maps dist/worker.js",
     "test": "node --import tsx --test test/*.test.ts",
     "test:s3": "node --import tsx --test test/*s3*.integration.test.ts",
@@ -26,6 +27,7 @@
     "@aws-sdk/client-s3": "3.1128.0",
     "@better-auth/api-key": "1.7.3",
     "@better-auth/drizzle-adapter": "1.7.3",
+    "@modelcontextprotocol/server": "2.2.0",
     "@scalar/express-api-reference": "0.10.18",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
@@ -43,6 +45,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",

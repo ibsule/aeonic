@@ -59,7 +59,18 @@ export class AgentReadToolService {
       throw new AgentPolicyError('invalid_tool_arguments', 'assets.get requires one UUID assetId.')
     }
     const asset = this.database.db
-      .select()
+      .select({
+        id: assets.id,
+        publicId: assets.publicId,
+        name: assets.name,
+        folder: assets.folder,
+        mediaKind: assets.mediaKind,
+        visibility: assets.visibility,
+        state: assets.state,
+        currentVersion: assets.currentVersion,
+        createdAt: assets.createdAt,
+        updatedAt: assets.updatedAt,
+      })
       .from(assets)
       .where(
         and(
@@ -73,7 +84,18 @@ export class AgentReadToolService {
     const version =
       asset.currentVersion > 0
         ? (this.database.db
-            .select()
+            .select({
+              id: assetVersions.id,
+              version: assetVersions.version,
+              state: assetVersions.state,
+              mimeType: assetVersions.mimeType,
+              sizeBytes: assetVersions.sizeBytes,
+              width: assetVersions.width,
+              height: assetVersions.height,
+              durationMs: assetVersions.durationMs,
+              metadata: assetVersions.metadata,
+              createdAt: assetVersions.createdAt,
+            })
             .from(assetVersions)
             .where(
               and(
@@ -85,7 +107,14 @@ export class AgentReadToolService {
             )
             .get() ?? null)
         : null
-    return { asset, version }
+    return {
+      asset: {
+        ...asset,
+        createdAt: asset.createdAt.toISOString(),
+        updatedAt: asset.updatedAt.toISOString(),
+      },
+      version: version ? { ...version, createdAt: version.createdAt.toISOString() } : null,
+    }
   }
 
   private listAssets(scope: TenantScope, rawArguments: unknown): unknown {
@@ -142,5 +171,6 @@ export class AgentReadToolService {
       .orderBy(desc(assets.createdAt), desc(assets.id))
       .limit(limit as number)
       .all()
+      .map((asset) => ({ ...asset, updatedAt: asset.updatedAt.toISOString() }))
   }
 }
