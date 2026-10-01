@@ -34,6 +34,11 @@ export const toolExecutionStates = [
 ] as const
 export type ToolExecutionState = (typeof toolExecutionStates)[number]
 
+function embeddedSchema<T extends { $id: string }>(schema: T): Omit<T, '$id'> {
+  const { $id: _id, ...embedded } = schema
+  return embedded
+}
+
 export interface AgentPlanBudget {
   maxSteps: number
   maxWallTimeMs: number
@@ -162,15 +167,81 @@ export const agentPlanSchema = {
     riskClass: { type: 'string', enum: agentRiskClasses },
     reversibility: { type: 'string', enum: reversibilityClasses },
     requiredRole: { type: 'string', enum: ['owner', 'admin'] },
-    calls: { type: 'array', minItems: 1, maxItems: 100, items: { $ref: 'AgentToolCall' } },
+    calls: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 100,
+      items: embeddedSchema(agentToolCallSchema),
+    },
     targets: {
       type: 'array',
       maxItems: 10000,
-      items: { $ref: 'AgentTargetSnapshot' },
+      items: embeddedSchema(agentTargetSnapshotSchema),
     },
-    budget: { $ref: 'AgentPlanBudget' },
+    budget: embeddedSchema(agentPlanBudgetSchema),
     expiresAt: { type: 'string', format: 'date-time' },
     createdAt: { type: 'string', format: 'date-time' },
+  },
+} as const
+
+export interface AgentRun {
+  id: string
+  organizationId: string
+  projectId: string
+  state: AgentRunState
+  request: string
+  provider: string | null
+  model: string | null
+  budget: AgentPlanBudget
+  stepsUsed: number
+  tokensUsed: number
+  costMicroUsd: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+  cancelledAt: string | null
+}
+
+export const agentRunSchema = {
+  $id: 'AgentRun',
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id',
+    'organizationId',
+    'projectId',
+    'state',
+    'request',
+    'provider',
+    'model',
+    'budget',
+    'stepsUsed',
+    'tokensUsed',
+    'costMicroUsd',
+    'createdBy',
+    'createdAt',
+    'updatedAt',
+    'completedAt',
+    'cancelledAt',
+  ],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    organizationId: { type: 'string', format: 'uuid' },
+    projectId: { type: 'string', format: 'uuid' },
+    state: { type: 'string', enum: agentRunStates },
+    request: { type: 'string', minLength: 1 },
+    provider: { type: ['string', 'null'] },
+    model: { type: ['string', 'null'] },
+    budget: embeddedSchema(agentPlanBudgetSchema),
+    stepsUsed: { type: 'integer', minimum: 0 },
+    tokensUsed: { type: 'integer', minimum: 0 },
+    costMicroUsd: { type: 'integer', minimum: 0 },
+    createdBy: { type: 'string', format: 'uuid' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    completedAt: { type: ['string', 'null'], format: 'date-time' },
+    cancelledAt: { type: ['string', 'null'], format: 'date-time' },
   },
 } as const
 
@@ -218,4 +289,64 @@ export const approvalRequestSchema = {
     decidedAt: { type: ['string', 'null'], format: 'date-time' },
     consumedAt: { type: ['string', 'null'], format: 'date-time' },
   },
+} as const
+
+export interface AgentApprovalInboxItem {
+  approval: ApprovalRequest
+  plan: AgentPlan
+  run: AgentRun
+}
+
+export interface AgentApprovalInbox {
+  items: AgentApprovalInboxItem[]
+}
+
+export const agentApprovalInboxSchema = {
+  $id: 'AgentApprovalInbox',
+  type: 'object',
+  additionalProperties: false,
+  required: ['items'],
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['approval', 'plan', 'run'],
+        properties: {
+          approval: embeddedSchema(approvalRequestSchema),
+          plan: embeddedSchema(agentPlanSchema),
+          run: embeddedSchema(agentRunSchema),
+        },
+      },
+    },
+  },
+} as const
+
+export interface ApprovalDecisionRequest {
+  decision: 'approved' | 'rejected'
+  reason?: string
+}
+
+export const approvalDecisionRequestSchema = {
+  $id: 'ApprovalDecisionRequest',
+  type: 'object',
+  additionalProperties: false,
+  required: ['decision'],
+  properties: {
+    decision: { type: 'string', enum: ['approved', 'rejected'] },
+    reason: { type: 'string', minLength: 1, maxLength: 1000 },
+  },
+} as const
+
+export interface ConsumeApprovalRequest {
+  planHash: string
+}
+
+export const consumeApprovalRequestSchema = {
+  $id: 'ConsumeApprovalRequest',
+  type: 'object',
+  additionalProperties: false,
+  required: ['planHash'],
+  properties: { planHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
 } as const

@@ -489,7 +489,7 @@ export class SqliteAgentWorkflowRepository {
     return transaction.immediate() as FrozenAgentPlan
   }
 
-  private findApproval(scope: TenantScope, approvalId: string): ApprovalRequestRecord | null {
+  findApproval(scope: TenantScope, approvalId: string): ApprovalRequestRecord | null {
     return (
       this.database.db
         .select()

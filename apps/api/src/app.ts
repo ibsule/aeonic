@@ -12,6 +12,8 @@ import pino, { type Logger } from 'pino'
 import type { EmbeddingProvider, VectorIndex } from './ai/contracts.js'
 import { createAiDependencies } from './ai/factory.js'
 import { SemanticSearchService } from './ai/service.js'
+import { SqliteAgentWorkflowRepository } from './agents/repository.js'
+import { AgentWorkflowService } from './agents/service.js'
 import { ApiKeyService } from './api-keys/service.js'
 import { AssetService } from './assets/service.js'
 import { SqliteAuditRepository } from './audit/repository.js'
@@ -30,6 +32,7 @@ import { createAppLogger, createHttpLogger } from './logging.js'
 import { ProjectMemberService } from './projects/members.js'
 import { ProjectService } from './projects/service.js'
 import { createApiKeysRouter } from './routes/api-keys.js'
+import { createAgentWorkflowsRouter } from './routes/agent-workflows.js'
 import { createAssetsRouter } from './routes/assets.js'
 import { createAuditEventsRouter } from './routes/audit-events.js'
 import { createDeliveryRouter } from './routes/delivery.js'
@@ -240,6 +243,13 @@ export function buildApp(options: BuildAppOptions = {}): Express {
         createAuditEventsRouter(
           options.auth,
           new AuditService(new SqliteAuditRepository(options.database), projects),
+        ),
+      )
+      app.use(
+        '/api/v1',
+        createAgentWorkflowsRouter(
+          options.auth,
+          new AgentWorkflowService(new SqliteAgentWorkflowRepository(options.database), projects),
         ),
       )
     }
