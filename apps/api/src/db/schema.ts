@@ -860,6 +860,266 @@ export const semanticEvaluations = sqliteTable(
   ],
 )
 
+export const agentRuns = sqliteTable(
+  'agent_runs',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => authSchema.organization.id, { onDelete: 'restrict' }),
+    projectId: text('project_id').notNull(),
+    state: text('state', {
+      enum: ['planning', 'awaiting_approval', 'executing', 'succeeded', 'failed', 'cancelled'],
+    })
+      .notNull()
+      .default('planning'),
+    request: text('request').notNull(),
+    provider: text('provider'),
+    model: text('model'),
+    budget: text('budget', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    stepsUsed: integer('steps_used').notNull().default(0),
+    tokensUsed: integer('tokens_used').notNull().default(0),
+    costMicroUsd: integer('cost_micro_usd').notNull().default(0),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+    cancelledAt: integer('cancelled_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.organizationId],
+      foreignColumns: [projects.id, projects.organizationId],
+      name: 'agent_runs_project_organization_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('agent_runs_id_tenant_unique').on(table.id, table.organizationId, table.projectId),
+    index('agent_runs_project_created_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.createdAt,
+    ),
+    check(
+      'agent_runs_state_valid',
+      sql`${table.state} IN ('planning', 'awaiting_approval', 'executing', 'succeeded', 'failed', 'cancelled')`,
+    ),
+    check(
+      'agent_runs_usage_nonnegative',
+      sql`${table.stepsUsed} >= 0 AND ${table.tokensUsed} >= 0 AND ${table.costMicroUsd} >= 0`,
+    ),
+    check(
+      'agent_runs_completion_consistent',
+      sql`(${table.state} IN ('succeeded', 'failed', 'cancelled')) = (${table.completedAt} IS NOT NULL)`,
+    ),
+    check(
+      'agent_runs_cancellation_consistent',
+      sql`(${table.state} = 'cancelled') = (${table.cancelledAt} IS NOT NULL)`,
+    ),
+  ],
+)
+
+export const agentPlans = sqliteTable(
+  'agent_plans',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id').notNull(),
+    projectId: text('project_id').notNull(),
+    runId: text('run_id').notNull(),
+    planHash: text('plan_hash').notNull(),
+    plannerVersion: text('planner_version').notNull(),
+    summary: text('summary').notNull(),
+    riskClass: text('risk_class', { enum: ['standard', 'sensitive', 'destructive'] }).notNull(),
+    reversibility: text('reversibility', {
+      enum: ['reversible', 'compensatable', 'irreversible'],
+    }).notNull(),
+    requiredRole: text('required_role', { enum: ['owner', 'admin'] }).notNull(),
+    toolCalls: text('tool_calls', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull(),
+    targetSnapshot: text('target_snapshot', { mode: 'json' })
+      .$type<Record<string, unknown>[]>()
+      .notNull(),
+    budget: text('budget', { mode: 'json' }).$type<Record<string, number>>().notNull(),
+    estimatedCostMicroUsd: integer('estimated_cost_micro_usd').notNull().default(0),
+    estimatedOutputBytes: integer('estimated_output_bytes').notNull().default(0),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.runId, table.organizationId, table.projectId],
+      foreignColumns: [agentRuns.id, agentRuns.organizationId, agentRuns.projectId],
+      name: 'agent_plans_run_tenant_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('agent_plans_hash_unique').on(table.planHash),
+    uniqueIndex('agent_plans_id_tenant_unique').on(table.id, table.organizationId, table.projectId),
+    uniqueIndex('agent_plans_id_hash_tenant_unique').on(
+      table.id,
+      table.planHash,
+      table.organizationId,
+      table.projectId,
+    ),
+    index('agent_plans_project_created_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.createdAt,
+    ),
+    check(
+      'agent_plans_hash_valid',
+      sql`length(${table.planHash}) = 64 AND ${table.planHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      'agent_plans_risk_valid',
+      sql`${table.riskClass} IN ('standard', 'sensitive', 'destructive')`,
+    ),
+    check(
+      'agent_plans_reversibility_valid',
+      sql`${table.reversibility} IN ('reversible', 'compensatable', 'irreversible')`,
+    ),
+    check('agent_plans_role_valid', sql`${table.requiredRole} IN ('owner', 'admin')`),
+    check(
+      'agent_plans_estimates_nonnegative',
+      sql`${table.estimatedCostMicroUsd} >= 0 AND ${table.estimatedOutputBytes} >= 0`,
+    ),
+    check('agent_plans_expiry_valid', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+)
+
+export const approvalRequests = sqliteTable(
+  'approval_requests',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id').notNull(),
+    projectId: text('project_id').notNull(),
+    planId: text('plan_id').notNull(),
+    planHash: text('plan_hash').notNull(),
+    state: text('state', {
+      enum: ['pending', 'approved', 'rejected', 'expired', 'cancelled', 'consumed'],
+    })
+      .notNull()
+      .default('pending'),
+    requestedBy: text('requested_by')
+      .notNull()
+      .references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    decidedBy: text('decided_by').references(() => authSchema.user.id, { onDelete: 'restrict' }),
+    decisionReason: text('decision_reason'),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    decidedAt: integer('decided_at', { mode: 'timestamp_ms' }),
+    consumedAt: integer('consumed_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.planId, table.planHash, table.organizationId, table.projectId],
+      foreignColumns: [
+        agentPlans.id,
+        agentPlans.planHash,
+        agentPlans.organizationId,
+        agentPlans.projectId,
+      ],
+      name: 'approval_requests_plan_tenant_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('approval_requests_one_pending_per_plan')
+      .on(table.planId)
+      .where(sql`${table.state} = 'pending'`),
+    uniqueIndex('approval_requests_id_tenant_unique').on(
+      table.id,
+      table.organizationId,
+      table.projectId,
+    ),
+    index('approval_requests_inbox_idx').on(
+      table.organizationId,
+      table.projectId,
+      table.state,
+      table.createdAt,
+    ),
+    check(
+      'approval_requests_state_valid',
+      sql`${table.state} IN ('pending', 'approved', 'rejected', 'expired', 'cancelled', 'consumed')`,
+    ),
+    check(
+      'approval_requests_hash_valid',
+      sql`length(${table.planHash}) = 64 AND ${table.planHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      'approval_requests_decision_consistent',
+      sql`(${table.state} IN ('approved', 'rejected', 'consumed')) = (${table.decidedBy} IS NOT NULL AND ${table.decidedAt} IS NOT NULL)`,
+    ),
+    check(
+      'approval_requests_consumption_consistent',
+      sql`(${table.state} = 'consumed') = (${table.consumedAt} IS NOT NULL)`,
+    ),
+    check('approval_requests_expiry_valid', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+)
+
+export const toolExecutions = sqliteTable(
+  'tool_executions',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id').notNull(),
+    projectId: text('project_id').notNull(),
+    runId: text('run_id').notNull(),
+    planId: text('plan_id').notNull(),
+    approvalRequestId: text('approval_request_id').notNull(),
+    callId: text('call_id').notNull(),
+    toolName: text('tool_name').notNull(),
+    argumentsHash: text('arguments_hash').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    state: text('state', {
+      enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped'],
+    })
+      .notNull()
+      .default('queued'),
+    attempt: integer('attempt').notNull().default(0),
+    result: text('result', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+    errorCode: text('error_code'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    startedAt: integer('started_at', { mode: 'timestamp_ms' }),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.runId, table.organizationId, table.projectId],
+      foreignColumns: [agentRuns.id, agentRuns.organizationId, agentRuns.projectId],
+      name: 'tool_executions_run_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.planId, table.organizationId, table.projectId],
+      foreignColumns: [agentPlans.id, agentPlans.organizationId, agentPlans.projectId],
+      name: 'tool_executions_plan_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.approvalRequestId, table.organizationId, table.projectId],
+      foreignColumns: [
+        approvalRequests.id,
+        approvalRequests.organizationId,
+        approvalRequests.projectId,
+      ],
+      name: 'tool_executions_approval_tenant_fk',
+    }).onDelete('restrict'),
+    uniqueIndex('tool_executions_plan_call_unique').on(table.planId, table.callId),
+    uniqueIndex('tool_executions_idempotency_unique').on(table.idempotencyKey),
+    index('tool_executions_run_state_idx').on(table.runId, table.state),
+    check(
+      'tool_executions_state_valid',
+      sql`${table.state} IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped')`,
+    ),
+    check('tool_executions_attempt_nonnegative', sql`${table.attempt} >= 0`),
+    check(
+      'tool_executions_started_consistent',
+      sql`(${table.state} <> 'queued') = (${table.startedAt} IS NOT NULL)`,
+    ),
+    check(
+      'tool_executions_completed_consistent',
+      sql`(${table.state} IN ('succeeded', 'failed', 'cancelled', 'skipped')) = (${table.completedAt} IS NOT NULL)`,
+    ),
+    check(
+      'tool_executions_arguments_hash_valid',
+      sql`length(${table.argumentsHash}) = 64 AND ${table.argumentsHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+)
+
 export const assetSearchDocuments = sqliteTable(
   'asset_search_documents',
   {
@@ -918,6 +1178,8 @@ export const auditEvents = sqliteTable(
 
 export const schema = {
   ...authSchema,
+  agentPlans,
+  agentRuns,
   aiAssetExclusions,
   aiIndexRecords,
   aiIndexes,
@@ -926,6 +1188,7 @@ export const schema = {
   assets,
   assetSearchDocuments,
   assetVersions,
+  approvalRequests,
   auditEvents,
   jobs,
   projectMembers,
@@ -934,5 +1197,6 @@ export const schema = {
   storageObjects,
   semanticEvaluations,
   systemSettings,
+  toolExecutions,
   uploads,
 }

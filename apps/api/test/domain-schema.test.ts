@@ -4,6 +4,9 @@ import { v7 as uuidv7 } from 'uuid'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
 import {
+  agentPlans,
+  agentRuns,
+  approvalRequests,
   assets,
   assetVersions,
   derivatives,
@@ -471,6 +474,137 @@ describe('Phase 4 derivative cache schema', () => {
           .values({ ...derivative, id: uuidv7(), cacheKey: '5'.repeat(64), state: 'ready' })
           .run(),
       /CHECK constraint failed: derivatives_ready_metadata/,
+    )
+  })
+})
+
+describe('Phase 7 agent approval schema', () => {
+  function seedRunAndPlan(database: DatabaseConnection) {
+    const tenant = seedTenants(database)
+    const runId = uuidv7()
+    const planId = uuidv7()
+    const planHash = 'a'.repeat(64)
+    const expiresAt = new Date(tenant.now.getTime() + 15 * 60_000)
+    const budget = {
+      maxSteps: 10,
+      maxWallTimeMs: 60_000,
+      maxTokens: 10_000,
+      maxCostMicroUsd: 100_000,
+      maxAssets: 100,
+      maxOutputBytes: 10_000_000,
+      maxRetries: 2,
+    }
+    database.db
+      .insert(agentRuns)
+      .values({
+        id: runId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        request: 'Find assets that need descriptions.',
+        budget,
+        createdBy: tenant.userId,
+        createdAt: tenant.now,
+        updatedAt: tenant.now,
+      })
+      .run()
+    database.db
+      .insert(agentPlans)
+      .values({
+        id: planId,
+        organizationId: tenant.firstOrganizationId,
+        projectId: tenant.firstProjectId,
+        runId,
+        planHash,
+        plannerVersion: 'planner-v1',
+        summary: 'Add descriptions to one asset.',
+        riskClass: 'standard',
+        reversibility: 'reversible',
+        requiredRole: 'admin',
+        toolCalls: [{ id: 'call-1', tool: 'assets.update_metadata', arguments: {} }],
+        targetSnapshot: [{ assetId: uuidv7(), version: 1 }],
+        budget,
+        expiresAt,
+        createdAt: tenant.now,
+      })
+      .run()
+    return { ...tenant, runId, planId, planHash, expiresAt }
+  }
+
+  it('freezes plan content and its approval hash', () => {
+    const database = createDatabase()
+    const seeded = seedRunAndPlan(database)
+
+    assert.throws(
+      () =>
+        database.client
+          .prepare('update agent_plans set summary = ? where id = ?')
+          .run('Changed after review', seeded.planId),
+      /agent plans are immutable/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(approvalRequests)
+          .values({
+            id: uuidv7(),
+            organizationId: seeded.firstOrganizationId,
+            projectId: seeded.firstProjectId,
+            planId: seeded.planId,
+            planHash: 'b'.repeat(64),
+            requestedBy: seeded.userId,
+            expiresAt: seeded.expiresAt,
+            createdAt: seeded.now,
+          })
+          .run(),
+      /FOREIGN KEY constraint failed/,
+    )
+  })
+
+  it('enforces tenant scope and complete approval decisions', () => {
+    const database = createDatabase()
+    const seeded = seedRunAndPlan(database)
+
+    assert.throws(
+      () =>
+        database.db
+          .insert(agentPlans)
+          .values({
+            id: uuidv7(),
+            organizationId: seeded.firstOrganizationId,
+            projectId: seeded.secondProjectId,
+            runId: seeded.runId,
+            planHash: 'c'.repeat(64),
+            plannerVersion: 'planner-v1',
+            summary: 'Cross-tenant plan.',
+            riskClass: 'standard',
+            reversibility: 'reversible',
+            requiredRole: 'admin',
+            toolCalls: [],
+            targetSnapshot: [],
+            budget: {},
+            expiresAt: seeded.expiresAt,
+            createdAt: seeded.now,
+          })
+          .run(),
+      /FOREIGN KEY constraint failed/,
+    )
+    assert.throws(
+      () =>
+        database.db
+          .insert(approvalRequests)
+          .values({
+            id: uuidv7(),
+            organizationId: seeded.firstOrganizationId,
+            projectId: seeded.firstProjectId,
+            planId: seeded.planId,
+            planHash: seeded.planHash,
+            state: 'approved',
+            requestedBy: seeded.userId,
+            expiresAt: seeded.expiresAt,
+            createdAt: seeded.now,
+          })
+          .run(),
+      /CHECK constraint failed: approval_requests_decision_consistent/,
     )
   })
 })
