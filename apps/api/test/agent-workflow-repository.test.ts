@@ -10,7 +10,14 @@ import {
 } from '../src/agents/repository.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
-import { assets, assetVersions, organization, projects, user } from '../src/db/schema.js'
+import {
+  assets,
+  assetVersions,
+  organization,
+  projects,
+  toolExecutions,
+  user,
+} from '../src/db/schema.js'
 
 const databases: DatabaseConnection[] = []
 
@@ -205,6 +212,11 @@ describe('durable agent approval workflow', () => {
     )
     assert.equal(consumed.approval.state, 'consumed')
     assert.equal(test.repository.findRun(test.scope, run.id)?.state, 'executing')
+    const executions = test.database.db.select().from(toolExecutions).all()
+    assert.equal(executions.length, 1)
+    assert.equal(executions[0]?.callId, 'step_1')
+    assert.equal(executions[0]?.toolName, 'assets.delete')
+    assert.match(executions[0]?.idempotencyKey ?? '', /^[0-9a-f]{64}$/)
     assert.throws(
       () =>
         test.repository.consumeApproval(

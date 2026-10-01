@@ -8,7 +8,14 @@ import type {
 } from '@aeonic/contracts'
 import { v7 as uuidv7 } from 'uuid'
 import type { DatabaseConnection } from '../db/database.js'
-import { agentPlans, agentRuns, approvalRequests, assets, assetVersions } from '../db/schema.js'
+import {
+  agentPlans,
+  agentRuns,
+  approvalRequests,
+  assets,
+  assetVersions,
+  toolExecutions,
+} from '../db/schema.js'
 import type { TenantScope } from '../repositories/types.js'
 import { hashAgentPlan } from './policy.js'
 
@@ -377,6 +384,24 @@ export class SqliteAgentWorkflowRepository {
           'approval_race_lost',
           'The approval or run was changed before execution could begin.',
         )
+      }
+      for (const call of plan.toolCalls) {
+        this.database.db
+          .insert(toolExecutions)
+          .values({
+            id: uuidv7(),
+            organizationId: scope.organizationId,
+            projectId: scope.projectId,
+            runId: plan.runId,
+            planId: plan.id,
+            approvalRequestId: approval.id,
+            callId: call.id,
+            toolName: call.tool,
+            argumentsHash: hashAgentPlan(call.arguments),
+            idempotencyKey: hashAgentPlan({ planHash: plan.planHash, callId: call.id }),
+            createdAt: now,
+          })
+          .run()
       }
       return { plan, approval: this.findApproval(scope, approvalId) }
     })
