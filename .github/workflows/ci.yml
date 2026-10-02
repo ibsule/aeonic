@@ -29,6 +29,11 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - name: Install media verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-dejavu-core libreoffice poppler-utils
+
       - name: Enable the declared package manager
         run: |
           corepack enable
