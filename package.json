@@ -13,6 +13,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
+    "security:audit": "pnpm audit --prod --audit-level high",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
