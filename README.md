@@ -166,6 +166,10 @@ The optional AI profile is documented in [Optional semantic search](docs/semanti
 The optional stdio MCP server and its human approval boundary are documented in
 [Approval-gated media workflows](docs/agent-workflows.md).
 
+Public contract guarantees and supported environments are documented in
+[API stability and deprecation](docs/api-stability.md) and the [support matrix](docs/support-matrix.md).
+Release candidates follow the evidence-based [release checklist](docs/release-checklist.md).
+
 For a no-CLI-after-installation experience, follow [the Compose deployment guide](./docs/deployment.md).
 It covers secret generation, TLS, first-run setup, diagnostics, backup, and recovery. Review
 [the upgrade and rollback guide](./docs/upgrade.md) before changing versions.
@@ -185,6 +189,9 @@ It covers secret generation, TLS, first-run setup, diagnostics, backup, and reco
 | `pnpm test` | Run the test suite |
 | `pnpm --filter @aeonic/api test:s3` | Run the opt-in live S3 compatibility contract |
 | `pnpm bench:transform` | Benchmark the deterministic 12-megapixel image transform fixture |
+| `pnpm bench:metadata` | Benchmark the authenticated metadata API with 100,000 assets |
+| `pnpm security:audit` | Fail on high or critical production dependency advisories |
+| `pnpm release:verify` | Check version, image, documentation, and workflow metadata consistency |
 | `pnpm typecheck` | Run strict TypeScript checks |
 | `pnpm lint` | Run static analysis |
 | `pnpm format:check` | Verify formatting |
