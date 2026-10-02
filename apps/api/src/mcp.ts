@@ -23,7 +23,7 @@ export function createAeonicMcpServer(
   approvalTools?: { planner: AgentPlannerService; actorId: string },
 ): McpServer {
   const server = new McpServer(
-    { name: 'aeonic', version: '0.8.0' },
+    { name: 'aeonic', version: '1.0.0-rc.1' },
     { capabilities: { tools: {} } },
   )
   server.registerTool(

@@ -41,7 +41,7 @@ describe('configuration', () => {
     assert.equal(config.aiInputMicroUsdPerMillionUnits, 0)
     assert.equal(config.aiOutputMicroUsdPerMillionUnits, 0)
     assert.equal(config.qdrantUrl, 'http://qdrant:6333')
-    assert.equal(config.version, '0.8.0')
+    assert.equal(config.version, '1.0.0-rc.1')
   })
 
   it('does not enable cross-origin access by default in production', () => {

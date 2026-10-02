@@ -6,8 +6,9 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.8* adds optional semantic retrieval and approval-gated media workflows to the accessible
-operator experience and supported Compose deployment. It ships:
+*Version 1.0.0-rc.1* is the first feature-complete v1 release candidate. It combines optional
+semantic retrieval and approval-gated media workflows with reproducible performance, security,
+supply-chain, upgrade, rollback, and compatibility gates. It ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -51,6 +52,9 @@ operator experience and supported Compose deployment. It ships:
   execution, cancellation, audit history, and worker-side revalidation.
 - An optional project-scoped stdio MCP server whose mutation-capable tool can request human review
   but cannot approve or execute its own plan.
+- Reproducible metadata, local-delivery, and image-transformation benchmarks; automated dependency
+  and CodeQL checks; multi-architecture image builds with SBOM, provenance, vulnerability scanning,
+  and keyless signatures; and an evidence-based release checklist.
 
 AI and agent features remain explicitly optional. The API and worker must both be running for
 uploads to become ready and for queued derivatives or approved agent changes to complete.

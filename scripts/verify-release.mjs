@@ -5,6 +5,7 @@ const root = new URL('../', import.meta.url)
 const read = (path) => readFile(new URL(path, root), 'utf8')
 const parsePackage = async (path) => JSON.parse(await read(path))
 const requiredDocuments = [
+  'CHANGELOG.md',
   'docs/api-stability.md',
   'docs/deployment.md',
   'docs/performance.md',
@@ -45,9 +46,13 @@ const config = await read('apps/api/src/config.ts')
 if (!config.includes(`AEONIC_VERSION: z.string().trim().min(1).default('${expectedVersion}')`)) {
   errors.push('The API default version does not match package.json.')
 }
+const mcp = await read('apps/api/src/mcp.ts')
+if (!mcp.includes(`{ name: 'aeonic', version: '${expectedVersion}' }`)) {
+  errors.push('The MCP server version does not match package.json.')
+}
 
 const readme = await read('README.md')
-const releaseLine = `*Version ${expectedVersion.replace(/\.\d+(?:-.+)?$/, '')}*`
+const releaseLine = `*Version ${expectedVersion}*`
 if (!readme.includes(releaseLine)) {
   errors.push(`README.md is missing the current release line ${releaseLine}.`)
 }
