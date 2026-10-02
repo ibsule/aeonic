@@ -6,7 +6,7 @@
     "lineWidth": 100
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/.turbo", "!**/node_modules"]
+    "includes": ["**", "!**/dist", "!**/.turbo", "!**/node_modules", "!var"]
   },
   "linter": {
     "enabled": true,

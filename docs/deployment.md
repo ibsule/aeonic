@@ -31,7 +31,7 @@ object volume. Only Caddy publishes host ports.
    ```bash
    docker compose config --quiet
    docker compose build
-   docker compose run --rm api node apps/api/dist/doctor.js
+   docker compose run --rm worker --enable-source-maps dist/doctor.js
    docker compose up -d
    docker compose ps
    ```

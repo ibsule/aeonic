@@ -4,7 +4,9 @@ x-runtime: &runtime
   build:
     context: .
     dockerfile: Dockerfile
+    target: api
   image: aeonic-api:1.0.0-rc.1
+  user: "1000:1000"
   restart: unless-stopped
   env_file:
     - path: .env
@@ -82,7 +84,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:3001/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -90,7 +92,12 @@ services:
 
   worker:
     <<: *runtime
-    command: ["node", "--enable-source-maps", "apps/api/dist/worker.js"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    image: aeonic-worker:1.0.0-rc.1
+    command: ["--enable-source-maps", "dist/worker.js"]
     environment:
       NODE_ENV: production
       DATABASE_PATH: /app/data/aeonic.db
@@ -125,7 +132,7 @@ services:
   ai-worker:
     <<: *runtime
     profiles: ["ai"]
-    command: ["node", "--enable-source-maps", "apps/api/dist/ai-worker.js"]
+    command: ["--enable-source-maps", "dist/ai-worker.js"]
     environment:
       NODE_ENV: production
       DATABASE_PATH: /app/data/aeonic.db

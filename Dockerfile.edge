@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:24.19.0-bookworm-slim AS build
+FROM node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS build
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV PNPM_CONFIG_FETCH_TIMEOUT=300000
@@ -17,6 +17,26 @@ COPY packages/contracts packages/contracts
 COPY scripts scripts
 RUN pnpm --filter @aeonic/dashboard... build
 
-FROM caddy:2.10.2-alpine
+FROM golang:1.27.1-alpine3.23@sha256:0908ac9b9319e09d7c238aabe914e0395c51d63c4e3d0ae8c554fda9158a5769 AS caddy-build
+ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
+RUN apk add --no-cache ca-certificates git
+WORKDIR /src
+RUN git clone https://github.com/caddyserver/caddy.git . \
+  && git checkout --detach "$CADDY_COMMIT" \
+  && test "$(git rev-parse HEAD)" = "$CADDY_COMMIT"
+# Caddy 2.11.4 predates fixes in Go and four transitive modules. Build the signed
+# release commit with the fixed versions already adopted on Caddy's main branch.
+RUN --mount=type=cache,id=aeonic-go-mod,target=/go/pkg/mod \
+    go get golang.org/x/crypto@v0.55.0 \
+      golang.org/x/net@v0.58.0 \
+      golang.org/x/text@v0.41.0 \
+      google.golang.org/grpc@v1.83.2 \
+  && go mod tidy \
+  && CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v2.11.4-aeonic.1" \
+      -o /out/caddy ./cmd/caddy
+
+FROM caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b AS edge
+COPY --from=caddy-build /out/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /workspace/apps/dashboard/dist /srv

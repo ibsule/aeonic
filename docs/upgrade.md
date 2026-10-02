@@ -30,7 +30,7 @@ evidence until a restoration rehearsal succeeds on a separate disposable Compose
 git fetch --tags
 git checkout <reviewed-release-tag>
 docker compose build
-docker compose run --rm api node apps/api/dist/doctor.js
+docker compose run --rm worker --enable-source-maps dist/doctor.js
 docker compose up -d
 docker compose ps
 ```
