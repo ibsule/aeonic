@@ -5,7 +5,13 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV PNPM_CONFIG_FETCH_TIMEOUT=300000
 ENV PNPM_CONFIG_FETCH_RETRIES=5
 ENV PNPM_CONFIG_NETWORK_CONCURRENCY=8
-RUN corepack enable
+RUN corepack enable \
+  && attempt=1 \
+  && until corepack install --global pnpm@11.25.0; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/dashboard/package.json apps/dashboard/package.json
@@ -19,7 +25,13 @@ RUN pnpm --filter @aeonic/dashboard... build
 
 FROM golang:1.27.1-alpine3.23@sha256:0908ac9b9319e09d7c238aabe914e0395c51d63c4e3d0ae8c554fda9158a5769 AS caddy-build
 ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
-RUN apk add --no-cache ca-certificates git
+RUN --mount=type=cache,id=aeonic-apk-caddy-build,target=/var/cache/apk,sharing=locked \
+    attempt=1 \
+  && until apk add --no-cache ca-certificates git; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done
 WORKDIR /src
 RUN git clone https://github.com/caddyserver/caddy.git . \
   && git checkout --detach "$CADDY_COMMIT" \

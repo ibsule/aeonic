@@ -9,7 +9,13 @@ RUN --mount=type=cache,id=aeonic-apt-build-lists,target=/var/lib/apt/lists,shari
     --mount=type=cache,id=aeonic-apt-build-cache,target=/var/cache/apt,sharing=locked \
     apt-get -o Acquire::Retries=5 update \
   && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends g++ make python3
-RUN corepack enable
+RUN corepack enable \
+  && attempt=1 \
+  && until corepack install --global pnpm@11.25.0; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json biome.json ./
 COPY apps/api/package.json apps/api/package.json
@@ -32,8 +38,19 @@ ENV PNPM_CONFIG_FETCH_TIMEOUT=300000
 ENV PNPM_CONFIG_FETCH_RETRIES=5
 ENV PNPM_CONFIG_NETWORK_CONCURRENCY=8
 RUN --mount=type=cache,id=aeonic-apk-worker-build,target=/var/cache/apk,sharing=locked \
-    apk add --no-cache build-base python3
-RUN corepack enable
+    attempt=1 \
+  && until apk add --no-cache build-base python3; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done
+RUN corepack enable \
+  && attempt=1 \
+  && until corepack install --global pnpm@11.25.0; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json biome.json ./
 COPY apps/api/package.json apps/api/package.json
@@ -51,7 +68,12 @@ RUN --mount=type=cache,id=aeonic-pnpm-worker-store,target=/pnpm/store \
 
 FROM node:24.21.0-alpine3.23@sha256:9ec4a2e289874ed0d722e1772ec2de45d2801541db8612f3638b26f128c69ac2 AS worker
 RUN --mount=type=cache,id=aeonic-apk-worker,target=/var/cache/apk,sharing=locked \
-    apk add --no-cache ffmpeg font-dejavu libreoffice poppler-utils tini \
+    attempt=1 \
+  && until apk add --no-cache ffmpeg font-dejavu libreoffice poppler-utils tini; do \
+    [ "$attempt" -ge 5 ] && exit 1; \
+    sleep "$((attempt * 2))"; \
+    attempt="$((attempt + 1))"; \
+  done \
   && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
   && rm -f /usr/local/bin/corepack /usr/local/bin/npm /usr/local/bin/npx \
     /usr/local/bin/yarn /usr/local/bin/yarnpkg
