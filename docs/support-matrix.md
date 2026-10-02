@@ -7,7 +7,7 @@ operating-system support policies.
 | Area | Supported v1 target | Notes |
 | --- | --- | --- |
 | Deployment | Docker Engine with Compose v2 on current security-supported Linux | Compose is the only supported production deployment for v1. |
-| CPU architecture | `linux/amd64`, `linux/arm64` | Tagged API and edge images are built as one multi-architecture manifest. |
+| CPU architecture | `linux/amd64`, `linux/arm64` | Tagged API, worker, and edge images are each built as a multi-architecture manifest. |
 | Host capacity | 4 vCPU, 8 GiB RAM, SSD, correctly sized persistent storage | The reference performance profile; smaller hosts may work without the published targets. |
 | Browser | Latest two stable major versions of Chrome, Edge, Firefox, and Safari | JavaScript, cookies, secure contexts, and modern CSS are required. |
 | API runtime for contributors | Node.js 24 and the pnpm version declared in `package.json` | Production users run the published containers. |

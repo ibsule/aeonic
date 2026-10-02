@@ -36,6 +36,7 @@ for (const item of packages) {
 const compose = await read('compose.yaml')
 for (const expected of [
   `image: aeonic-api:${expectedVersion}`,
+  `image: aeonic-worker:${expectedVersion}`,
   `image: aeonic-edge:${expectedVersion}`,
   `AEONIC_VERSION: ${expectedVersion}`,
 ]) {

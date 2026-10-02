@@ -5,7 +5,7 @@ in the release system; do not commit credentials, customer data, or private revi
 
 ## Candidate identity
 
-- [ ] Commit, annotated tag, application version, API image digest, and edge image digest agree.
+- [ ] Commit, annotated tag, application version, and API, worker, and edge image digests agree.
 - [ ] Release notes describe user-visible changes, migrations, compatibility, and known issues.
 - [ ] The tested source tree is clean and `pnpm release:verify` passes.
 
@@ -18,8 +18,8 @@ in the release system; do not commit credentials, customer data, or private revi
       range/cache, lease/crash, and OpenAPI tests pass.
 - [ ] Production dependency audit, CodeQL, and release-image scans contain no unaccepted high or
       critical finding.
-- [ ] SBOM and maximum provenance attestations are attached to both image manifests.
-- [ ] Both image digests have valid keyless signatures whose certificate identity and issuer match
+- [ ] SBOM and maximum provenance attestations are attached to all three image manifests.
+- [ ] All three image digests have valid keyless signatures whose certificate identity and issuer match
       the release workflow.
 
 ## Operational gates

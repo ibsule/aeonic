@@ -88,8 +88,13 @@ jobs:
         include:
           - image: api
             dockerfile: Dockerfile
+            target: api
+          - image: worker
+            dockerfile: Dockerfile
+            target: worker
           - image: edge
             dockerfile: Dockerfile.edge
+            target: edge
 
     steps:
       - name: Check out repository
@@ -125,6 +130,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
           push: ${{ needs.validate.outputs.publish == 'true' }}
           tags: ${{ steps.metadata.outputs.tags }}
