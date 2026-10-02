@@ -12,8 +12,9 @@ assessment must use the canonical [OWASP ASVS 5.0 release](https://github.com/OW
   findings still require triage; passing does not mean there are no vulnerabilities.
 - CodeQL runs its extended JavaScript and TypeScript query suite on pull requests, `main`, and a
   weekly schedule.
-- Tagged images are scanned at high severity before signing. The release is blocked when the scan
-  finds a high or critical image vulnerability without remediation or a documented exception.
+- Every amd64 and arm64 platform manifest in each tagged image is scanned at high severity before
+  signing. The release is blocked when a scan finds a high or critical image vulnerability without
+  remediation or a documented exception.
 - Release images carry BuildKit SBOM and maximum-provenance attestations and are signed by digest
   using GitHub's OIDC identity.
 

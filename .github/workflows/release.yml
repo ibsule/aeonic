@@ -140,11 +140,37 @@ jobs:
           sbom: true
           provenance: mode=max
 
-      - name: Scan published image
+      - name: Resolve platform manifests
+        if: needs.validate.outputs.publish == 'true'
+        id: platforms
+        env:
+          IMAGE: ${{ env.REGISTRY }}/ibsule/aeonic-${{ matrix.image }}
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          index="$(docker buildx imagetools inspect --raw "$IMAGE@$INDEX_DIGEST")"
+          amd64="$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' <<< "$index")"
+          arm64="$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64") | .digest' <<< "$index")"
+          if [ -z "$amd64" ] || [ "$amd64" = "null" ] || [ -z "$arm64" ] || [ "$arm64" = "null" ]; then
+            echo "The published index does not contain both supported Linux platforms." >&2
+            exit 1
+          fi
+          echo "amd64=$amd64" >> "$GITHUB_OUTPUT"
+          echo "arm64=$arm64" >> "$GITHUB_OUTPUT"
+
+      - name: Scan linux/amd64 image
         if: needs.validate.outputs.publish == 'true'
         uses: anchore/scan-action@f6601287cdb1efc985d6b765bbf99cb4c0ac29d8 # v7.0.0
         with:
-          image: ${{ env.REGISTRY }}/ibsule/aeonic-${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image: ${{ env.REGISTRY }}/ibsule/aeonic-${{ matrix.image }}@${{ steps.platforms.outputs.amd64 }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+
+      - name: Scan linux/arm64 image
+        if: needs.validate.outputs.publish == 'true'
+        uses: anchore/scan-action@f6601287cdb1efc985d6b765bbf99cb4c0ac29d8 # v7.0.0
+        with:
+          image: ${{ env.REGISTRY }}/ibsule/aeonic-${{ matrix.image }}@${{ steps.platforms.outputs.arm64 }}
           fail-build: true
           severity-cutoff: high
           output-format: table

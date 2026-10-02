@@ -16,8 +16,8 @@ in the release system; do not commit credentials, customer data, or private revi
 - [ ] `pnpm check` passes from a clean checkout with the declared Node and pnpm versions.
 - [ ] Unit, integration, dashboard accessibility, adversarial media, tenant-isolation, agent-policy,
       range/cache, lease/crash, and OpenAPI tests pass.
-- [ ] Production dependency audit, CodeQL, and release-image scans contain no unaccepted high or
-      critical finding.
+- [ ] Production dependency audit, CodeQL, and every amd64 and arm64 release-image scan contain no
+      unaccepted high or critical finding.
 - [ ] SBOM and maximum provenance attestations are attached to all three image manifests.
 - [ ] All three image digests have valid keyless signatures whose certificate identity and issuer match
       the release workflow.
