@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { openDatabase } from '../src/db/database.js'
 import {
+  aiProjectSettings,
   apikey,
   assets,
   jobs,
@@ -529,6 +530,101 @@ describe('database', () => {
         { kind: 'image', duration_ms: null, output_format: 'webp' },
       )
       assert.deepEqual(connection.client.pragma('foreign_key_check'), [])
+    } finally {
+      connection.close()
+    }
+  })
+
+  it('upgrades a populated pre-agent database without changing existing AI settings', () => {
+    const connection = openDatabase({
+      databasePath: createDatabasePath(),
+      databaseBusyTimeoutMs: 5_000,
+      databaseWalAutocheckpointPages: 1_000,
+    })
+
+    try {
+      connection.migrate(migrationSubset(13))
+      const now = new Date()
+      const userId = uuidv7()
+      const organizationId = uuidv7()
+      const projectId = uuidv7()
+      connection.db
+        .insert(user)
+        .values({ id: userId, name: 'Upgrade Owner', email: 'agent-upgrade@example.com' })
+        .run()
+      connection.db
+        .insert(organization)
+        .values({
+          id: organizationId,
+          name: 'Agent Upgrade Studio',
+          slug: 'agent-upgrade-studio',
+          createdAt: now,
+        })
+        .run()
+      connection.db
+        .insert(projects)
+        .values({
+          id: projectId,
+          organizationId,
+          name: 'Agent Upgrade Library',
+          slug: 'agent-upgrade-library',
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+      connection.db
+        .insert(aiProjectSettings)
+        .values({
+          organizationId,
+          projectId,
+          enabled: true,
+          allowPrivateAssets: false,
+          monthlyBudgetMicroUsd: 2_500_000,
+          maxAssetsPerRun: 250,
+          concurrency: 2,
+          updatedBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run()
+
+      connection.migrate()
+
+      assert.deepEqual(
+        connection.client
+          .prepare(
+            `select enabled, allow_private_assets, monthly_budget_micro_usd,
+                    max_assets_per_run, concurrency
+               from ai_project_settings
+              where organization_id = ? and project_id = ?`,
+          )
+          .get(organizationId, projectId),
+        {
+          enabled: 1,
+          allow_private_assets: 0,
+          monthly_budget_micro_usd: 2_500_000,
+          max_assets_per_run: 250,
+          concurrency: 2,
+        },
+      )
+      assert.equal(
+        connection.client
+          .prepare("select name from sqlite_master where type = 'table' and name = 'agent_runs'")
+          .pluck()
+          .get(),
+        'agent_runs',
+      )
+      assert.ok(
+        connection.client
+          .prepare(
+            "select name from pragma_table_info('agent_runs') where name = 'idempotency_key'",
+          )
+          .pluck()
+          .get(),
+      )
+      assert.deepEqual(connection.client.pragma('foreign_key_check'), [])
+      assert.equal(connection.client.pragma('integrity_check', { simple: true }), 'ok')
     } finally {
       connection.close()
     }
