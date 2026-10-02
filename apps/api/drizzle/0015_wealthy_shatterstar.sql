@@ -1,0 +1,2 @@
+ALTER TABLE `agent_runs` ADD `idempotency_key` text;--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_runs_tenant_idempotency_unique` ON `agent_runs` (`organization_id`,`project_id`,`idempotency_key`) WHERE "agent_runs"."idempotency_key" IS NOT NULL;

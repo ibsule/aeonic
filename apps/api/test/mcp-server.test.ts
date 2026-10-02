@@ -2,11 +2,23 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { v7 as uuidv7 } from 'uuid'
+import { AgentPlannerService } from '../src/agents/planner.js'
+import { SqliteAgentWorkflowRepository } from '../src/agents/repository.js'
 import { AgentReadToolService } from '../src/agents/tools.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
-import { assets, assetVersions, organization, projects, user } from '../src/db/schema.js'
+import {
+  agentPlans,
+  agentRuns,
+  assets,
+  assetVersions,
+  member,
+  organization,
+  projects,
+  user,
+} from '../src/db/schema.js'
 import { createAeonicMcpServer } from '../src/mcp.js'
+import { ProjectService } from '../src/projects/service.js'
 
 const databases: DatabaseConnection[] = []
 afterEach(() => {
@@ -26,6 +38,10 @@ function setup() {
   database.db
     .insert(organization)
     .values({ id: organizationId, name: 'Studio', slug: 'studio', createdAt: now })
+    .run()
+  database.db
+    .insert(member)
+    .values({ id: uuidv7(), organizationId, userId, role: 'owner', createdAt: now })
     .run()
   database.db
     .insert(projects)
@@ -70,7 +86,7 @@ function setup() {
       createdAt: now,
     })
     .run()
-  return { database, scope: { organizationId, projectId }, assetId }
+  return { database, scope: { organizationId, projectId }, assetId, userId }
 }
 
 describe('read-only MCP server', () => {
@@ -100,6 +116,60 @@ describe('read-only MCP server', () => {
       test.assetId,
     )
     assert.doesNotMatch(JSON.stringify(result.structuredContent), /storageObjectId|createdBy/)
+
+    await client.close()
+    await server.close()
+  })
+})
+
+describe('approval-request MCP tool', () => {
+  it('freezes one replay-safe plan without mutating the asset', async () => {
+    const test = setup()
+    const repository = new SqliteAgentWorkflowRepository(test.database)
+    const server = createAeonicMcpServer(new AgentReadToolService(test.database), test.scope, {
+      planner: new AgentPlannerService(
+        test.database,
+        repository,
+        new ProjectService(test.database),
+      ),
+      actorId: test.userId,
+    })
+    const client = new Client({ name: 'aeonic-approval-test', version: '1.0.0' })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverTransport)
+    await client.connect(clientTransport)
+
+    const listed = await client.listTools()
+    const requestTool = listed.tools.find(
+      (tool) => tool.name === 'aeonic_request_asset_metadata_update',
+    )
+    assert.equal(requestTool?.annotations?.readOnlyHint, false)
+    assert.equal(requestTool?.annotations?.destructiveHint, false)
+    assert.equal(requestTool?.annotations?.idempotentHint, true)
+
+    const request = {
+      name: 'aeonic_request_asset_metadata_update',
+      arguments: {
+        assetId: test.assetId,
+        name: 'Reviewed hero',
+        reason: 'Prepare an exact plan for operator approval.',
+        idempotencyKey: 'mcp-metadata-0001',
+      },
+    }
+    const first = await client.callTool(request)
+    const replay = await client.callTool(request)
+    const firstOutput = first.structuredContent as {
+      mutationExecuted: boolean
+      approvalId: string
+      planId: string
+    }
+    const replayOutput = replay.structuredContent as { approvalId: string; planId: string }
+    assert.equal(firstOutput.mutationExecuted, false)
+    assert.equal(replayOutput.approvalId, firstOutput.approvalId)
+    assert.equal(replayOutput.planId, firstOutput.planId)
+    assert.equal(test.database.db.select().from(agentRuns).all().length, 1)
+    assert.equal(test.database.db.select().from(agentPlans).all().length, 1)
+    assert.equal(test.database.db.select({ name: assets.name }).from(assets).get()?.name, 'Hero')
 
     await client.close()
     await server.close()

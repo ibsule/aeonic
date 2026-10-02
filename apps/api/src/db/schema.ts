@@ -879,6 +879,7 @@ export const agentRuns = sqliteTable(
       .notNull()
       .default('planning'),
     request: text('request').notNull(),
+    idempotencyKey: text('idempotency_key'),
     provider: text('provider'),
     model: text('model'),
     budget: text('budget', { mode: 'json' }).$type<AgentPlanBudget>().notNull(),
@@ -905,6 +906,9 @@ export const agentRuns = sqliteTable(
       table.projectId,
       table.createdAt,
     ),
+    uniqueIndex('agent_runs_tenant_idempotency_unique')
+      .on(table.organizationId, table.projectId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
     check(
       'agent_runs_state_valid',
       sql`${table.state} IN ('planning', 'awaiting_approval', 'executing', 'succeeded', 'failed', 'cancelled')`,

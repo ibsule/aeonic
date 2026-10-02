@@ -77,7 +77,18 @@ function toPlan(row: AgentPlanRecord): AgentPlan {
 
 function toRun(row: AgentRunRecord): AgentRun {
   return {
-    ...row,
+    id: row.id,
+    organizationId: row.organizationId,
+    projectId: row.projectId,
+    state: row.state,
+    request: row.request,
+    provider: row.provider,
+    model: row.model,
+    budget: row.budget,
+    stepsUsed: row.stepsUsed,
+    tokensUsed: row.tokensUsed,
+    costMicroUsd: row.costMicroUsd,
+    createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,

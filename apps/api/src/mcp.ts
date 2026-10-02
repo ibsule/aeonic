@@ -2,9 +2,13 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { validate as isUuid } from 'uuid'
 import { z } from 'zod/v4'
+import { AgentPlannerService } from './agents/planner.js'
+import { SqliteAgentWorkflowRepository } from './agents/repository.js'
 import { AgentReadToolService } from './agents/tools.js'
 import { loadConfig } from './config.js'
 import { openDatabase } from './db/database.js'
+import { ProjectService } from './projects/service.js'
+import type { TenantScope } from './repositories/types.js'
 
 function requiredTenant(value: string | undefined, name: string): string {
   if (!value || !isUuid(value)) {
@@ -15,7 +19,8 @@ function requiredTenant(value: string | undefined, name: string): string {
 
 export function createAeonicMcpServer(
   tools: AgentReadToolService,
-  scope: { organizationId: string; projectId: string },
+  scope: TenantScope,
+  approvalTools?: { planner: AgentPlannerService; actorId: string },
 ): McpServer {
   const server = new McpServer(
     { name: 'aeonic', version: '0.8.0' },
@@ -83,6 +88,76 @@ export function createAeonicMcpServer(
       }
     },
   )
+  if (approvalTools) {
+    server.registerTool(
+      'aeonic_request_asset_metadata_update',
+      {
+        title: 'Request approval for an asset metadata update',
+        description:
+          'Freeze an exact asset metadata update plan for human review. This tool never changes the asset and never grants its own approval.',
+        inputSchema: z
+          .object({
+            assetId: z.uuid(),
+            name: z.string().trim().min(1).max(200).optional(),
+            folder: z.string().trim().max(500).optional(),
+            visibility: z.enum(['private', 'public']).optional(),
+            reason: z.string().trim().min(1).max(1_000),
+            idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/),
+          })
+          .refine(
+            (input) =>
+              input.name !== undefined ||
+              input.folder !== undefined ||
+              input.visibility !== undefined,
+            { message: 'At least one metadata change is required.' },
+          ),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => {
+        const frozen = approvalTools.planner.requestAssetMetadataUpdate(
+          approvalTools.actorId,
+          scope,
+          {
+            assetId: input.assetId,
+            reason: input.reason,
+            idempotencyKey: input.idempotencyKey,
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(input.folder === undefined ? {} : { folder: input.folder }),
+            ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
+          },
+          `mcp:${input.idempotencyKey}`,
+        )
+        const output = {
+          status: 'human_approval_required',
+          mutationExecuted: false,
+          approvalId: frozen.approval.id,
+          planId: frozen.plan.id,
+          planHash: frozen.plan.planHash,
+          summary: frozen.plan.summary,
+          riskClass: frozen.plan.riskClass,
+          reversibility: frozen.plan.reversibility,
+          requiredRole: frozen.plan.requiredRole,
+          calls: frozen.plan.toolCalls,
+          targets: frozen.plan.targetSnapshot,
+          expiresAt: frozen.approval.expiresAt.toISOString(),
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `No mutation was executed. Human approval is required.\n${JSON.stringify(output)}`,
+            },
+          ],
+          structuredContent: output,
+        }
+      },
+    )
+  }
   return server
 }
 
@@ -93,8 +168,19 @@ export function startMcpServer(environment: NodeJS.ProcessEnv = process.env) {
     organizationId: requiredTenant(environment.MCP_ORGANIZATION_ID, 'MCP_ORGANIZATION_ID'),
     projectId: requiredTenant(environment.MCP_PROJECT_ID, 'MCP_PROJECT_ID'),
   }
+  const approvalTools =
+    environment.MCP_APPROVAL_TOOLS_ENABLED === 'true'
+      ? {
+          planner: new AgentPlannerService(
+            database,
+            new SqliteAgentWorkflowRepository(database),
+            new ProjectService(database),
+          ),
+          actorId: requiredTenant(environment.MCP_ACTOR_USER_ID, 'MCP_ACTOR_USER_ID'),
+        }
+      : undefined
   const handle = serveStdio(
-    () => createAeonicMcpServer(new AgentReadToolService(database), scope),
+    () => createAeonicMcpServer(new AgentReadToolService(database), scope, approvalTools),
     {
       onerror: (error) => console.error('Aeonic MCP error:', error.message),
     },

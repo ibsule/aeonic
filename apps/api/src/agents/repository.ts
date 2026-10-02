@@ -18,7 +18,7 @@ import {
   toolExecutions,
 } from '../db/schema.js'
 import type { TenantScope } from '../repositories/types.js'
-import { hashAgentPlan } from './policy.js'
+import { canonicalPlanJson, hashAgentPlan } from './policy.js'
 
 export type AgentRunRecord = typeof agentRuns.$inferSelect
 export type AgentPlanRecord = typeof agentPlans.$inferSelect
@@ -37,6 +37,7 @@ export class AgentWorkflowConflictError extends Error {
 
 export interface CreateAgentRunInput extends TenantScope {
   readonly request: string
+  readonly idempotencyKey?: string
   readonly provider?: string
   readonly model?: string
   readonly budget: AgentPlanBudget
@@ -133,15 +134,46 @@ export class SqliteAgentWorkflowRepository {
 
   createRun(input: CreateAgentRunInput): AgentRunRecord {
     if (input.request.trim() === '') throw new TypeError('Agent requests cannot be empty.')
+    if (input.idempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey)) {
+      throw new TypeError('Agent idempotency keys must contain 8 to 128 safe ASCII characters.')
+    }
     const id = uuidv7()
-    this.database.db.transaction((transaction) => {
-      transaction
+    const transaction = this.database.client.transaction(() => {
+      if (input.idempotencyKey) {
+        const existing = this.database.db
+          .select()
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.organizationId, input.organizationId),
+              eq(agentRuns.projectId, input.projectId),
+              eq(agentRuns.idempotencyKey, input.idempotencyKey),
+            ),
+          )
+          .get()
+        if (existing) {
+          if (
+            existing.request !== input.request ||
+            existing.provider !== (input.provider ?? null) ||
+            existing.model !== (input.model ?? null) ||
+            canonicalPlanJson(existing.budget) !== canonicalPlanJson(input.budget)
+          ) {
+            throw new AgentWorkflowConflictError(
+              'idempotency_conflict',
+              'This idempotency key was already used for a different agent request.',
+            )
+          }
+          return existing
+        }
+      }
+      this.database.db
         .insert(agentRuns)
         .values({
           id,
           organizationId: input.organizationId,
           projectId: input.projectId,
           request: input.request,
+          idempotencyKey: input.idempotencyKey,
           provider: input.provider,
           model: input.model,
           budget: input.budget,
@@ -150,7 +182,7 @@ export class SqliteAgentWorkflowRepository {
           updatedAt: input.now,
         })
         .run()
-      transaction
+      this.database.db
         .insert(auditEvents)
         .values({
           id: uuidv7(),
@@ -166,12 +198,9 @@ export class SqliteAgentWorkflowRepository {
           createdAt: input.now,
         })
         .run()
+      return this.database.db.select().from(agentRuns).where(eq(agentRuns.id, id)).get()
     })
-    return this.database.db
-      .select()
-      .from(agentRuns)
-      .where(eq(agentRuns.id, id))
-      .get() as AgentRunRecord
+    return transaction.immediate() as AgentRunRecord
   }
 
   freezePlanAndRequestApproval(input: FreezeAgentPlanInput): FrozenAgentPlan {
@@ -305,6 +334,39 @@ export class SqliteAgentWorkflowRepository {
         .get() ?? null
     if (plan) assertPlanIntegrity(plan)
     return plan
+  }
+
+  findPlanByRun(scope: TenantScope, runId: string): AgentPlanRecord | null {
+    const plan =
+      this.database.db
+        .select()
+        .from(agentPlans)
+        .where(
+          and(
+            eq(agentPlans.runId, runId),
+            eq(agentPlans.organizationId, scope.organizationId),
+            eq(agentPlans.projectId, scope.projectId),
+          ),
+        )
+        .get() ?? null
+    if (plan) assertPlanIntegrity(plan)
+    return plan
+  }
+
+  findApprovalForPlan(scope: TenantScope, planId: string): ApprovalRequestRecord | null {
+    return (
+      this.database.db
+        .select()
+        .from(approvalRequests)
+        .where(
+          and(
+            eq(approvalRequests.planId, planId),
+            eq(approvalRequests.organizationId, scope.organizationId),
+            eq(approvalRequests.projectId, scope.projectId),
+          ),
+        )
+        .get() ?? null
+    )
   }
 
   listActionableApprovals(scope: TenantScope, now: Date): readonly ApprovalRequestRecord[] {
