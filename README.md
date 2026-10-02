@@ -6,7 +6,7 @@ developers and small teams.
 
 ## Current status
 
-*Version 1.0.0-rc.1* is the first feature-complete v1 release candidate. It combines optional
+*Version 1.0.0-rc.2* is the hardened v1 release candidate. It combines optional
 semantic retrieval and approval-gated media workflows with reproducible performance, security,
 supply-chain, upgrade, rollback, and compatibility gates. It ships:
 
