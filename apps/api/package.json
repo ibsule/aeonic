@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bench:transform": "tsx bench/image-transform.ts",
+    "bench:metadata": "node --import tsx bench/metadata-api.ts",
+    "bench:transform": "node --import tsx bench/image-transform.ts",
     "build": "pnpm clean && tsc -b",
     "clean": "node ../../scripts/clean-package.mjs",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
