@@ -1,10 +1,16 @@
 import {
+  agentApprovalInboxSchema,
+  agentRunSchema,
   aiIndexSchema,
   apiKeyListSchema,
   assetListSchema,
   assetSchema,
   assignProjectMemberRequestSchema,
   auditEventListSchema,
+  approvalDecisionRequestSchema,
+  approvalRequestSchema,
+  cancelAgentRunRequestSchema,
+  consumeApprovalRequestSchema,
   createApiKeyRequestSchema,
   createDeliveryUrlRequestSchema,
   createDerivativeRequestSchema,
@@ -165,6 +171,9 @@ const storageOverviewPath = `${projectItemPath}/storage`
 const transformPresetCollectionPath = `${projectItemPath}/transform-presets`
 const transformPresetVersionCollectionPath = `${transformPresetCollectionPath}/{presetName}/versions`
 const transformPresetVersionPath = `${transformPresetVersionCollectionPath}/{presetVersion}`
+const agentApprovalCollectionPath = `${projectItemPath}/agent-approvals`
+const agentApprovalItemPath = `${agentApprovalCollectionPath}/{approvalId}`
+const agentRunItemPath = `${projectItemPath}/agent-runs/{runId}`
 
 const tusResponseHeaders = {
   'Tus-Resumable': { schema: { type: 'string', const: '1.0.0' } },
@@ -214,6 +223,10 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
       {
         name: 'Semantic search',
         description: 'Optional, budgeted, project-isolated hybrid media retrieval.',
+      },
+      {
+        name: 'Agent workflows',
+        description: 'Approval-gated, exact-target media workflow plans and execution status.',
       },
     ],
     paths: {
@@ -1288,6 +1301,91 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           },
         },
       },
+      [agentApprovalCollectionPath]: {
+        get: {
+          operationId: 'listAgentApprovals',
+          tags: ['Agent workflows'],
+          summary: 'List agent plans awaiting an administrator action',
+          description:
+            'Returns frozen plan hashes, exact target snapshots, effects, risk, and current run state. Restricted to organization owners and administrators.',
+          security: cookieSecurity,
+          parameters: [parameter('OrganizationId'), parameter('ProjectId')],
+          responses: {
+            '200': jsonResponse('Actionable approval inbox.', 'AgentApprovalInbox'),
+            ...standardErrors,
+          },
+        },
+      },
+      [`${agentApprovalItemPath}/decision`]: {
+        post: {
+          operationId: 'decideAgentApproval',
+          tags: ['Agent workflows'],
+          summary: 'Approve or reject one exact frozen plan',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('ApprovalId'),
+          ],
+          requestBody: jsonBody('ApprovalDecisionRequest'),
+          responses: {
+            '200': jsonResponse('Recorded approval decision.', 'ApprovalRequest'),
+            ...standardErrors,
+          },
+        },
+      },
+      [`${agentApprovalItemPath}/execute`]: {
+        post: {
+          operationId: 'executeApprovedAgentPlan',
+          tags: ['Agent workflows'],
+          summary: 'Consume an approval and queue its exact plan once',
+          description:
+            'The supplied hash must equal the reviewed immutable plan. Targets are revalidated both when queueing and immediately before mutation.',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('ApprovalId'),
+          ],
+          requestBody: jsonBody('ConsumeApprovalRequest'),
+          responses: {
+            '202': jsonResponse('Approved run queued for execution.', 'AgentRun'),
+            ...standardErrors,
+          },
+        },
+      },
+      [agentRunItemPath]: {
+        get: {
+          operationId: 'getAgentRun',
+          tags: ['Agent workflows'],
+          summary: 'Get approval-gated agent run status',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('AgentRunId'),
+          ],
+          responses: { '200': jsonResponse('Agent run status.', 'AgentRun'), ...standardErrors },
+        },
+      },
+      [`${agentRunItemPath}/cancel`]: {
+        post: {
+          operationId: 'cancelAgentRun',
+          tags: ['Agent workflows'],
+          summary: 'Cancel a non-terminal agent run and its queued work',
+          security: cookieSecurity,
+          parameters: [
+            parameter('OrganizationId'),
+            parameter('ProjectId'),
+            parameter('AgentRunId'),
+          ],
+          requestBody: jsonBody('CancelAgentRunRequest'),
+          responses: {
+            '200': jsonResponse('Cancelled agent run.', 'AgentRun'),
+            ...standardErrors,
+          },
+        },
+      },
     },
     components: {
       securitySchemes: {
@@ -1440,6 +1538,18 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
           required: true,
           schema: { type: 'string', format: 'uuid' },
         },
+        ApprovalId: {
+          name: 'approvalId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+        AgentRunId: {
+          name: 'runId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
         PresetName: {
           name: 'presetName',
           in: 'path',
@@ -1510,6 +1620,12 @@ export function createOpenApiDocument(config: AppConfig): OpenApiDocument {
         StartSemanticReindexRequest: startSemanticReindexRequestSchema,
         UpdateAssetAiExclusionRequest: updateAssetAiExclusionRequestSchema,
         SemanticSearchResponse: component(semanticSearchResponseSchema),
+        AgentApprovalInbox: component(agentApprovalInboxSchema),
+        AgentRun: component(agentRunSchema),
+        ApprovalRequest: component(approvalRequestSchema),
+        ApprovalDecisionRequest: component(approvalDecisionRequestSchema),
+        ConsumeApprovalRequest: component(consumeApprovalRequestSchema),
+        CancelAgentRunRequest: component(cancelAgentRunRequestSchema),
         EmailCredentials: {
           type: 'object',
           additionalProperties: false,

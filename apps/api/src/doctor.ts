@@ -140,7 +140,7 @@ export async function runDoctor(
     name: 'ai-providers',
     status: 'pass',
     detail:
-      'Optional AI capabilities are disabled in Phase 5; core operation does not require a provider.',
+      'Optional AI capabilities do not affect core readiness; verify the AI profile separately.',
   })
   return { ok: checks.every((check) => check.status !== 'fail'), checks }
 }

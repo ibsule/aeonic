@@ -1,8 +1,8 @@
 # Docker Compose deployment
 
-Aeonic’s supported Phase 5 deployment is one Docker Compose project with a public Caddy edge, an
-internal Express API, and an internal media worker. The API and worker share the SQLite database and
-local object volume. Only Caddy publishes host ports.
+Aeonic’s supported deployment is one Docker Compose project with a public Caddy edge, an internal
+Express API, and an internal media worker. The API and worker share the SQLite database and local
+object volume. Only Caddy publishes host ports.
 
 ## First start
 

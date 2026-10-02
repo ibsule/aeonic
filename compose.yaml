@@ -4,7 +4,7 @@ x-runtime: &runtime
   build:
     context: .
     dockerfile: Dockerfile
-  image: aeonic-api:0.7.0
+  image: aeonic-api:0.8.0
   restart: unless-stopped
   env_file:
     - path: .env
@@ -31,7 +31,7 @@ x-runtime: &runtime
     AI_OUTPUT_MICRO_USD_PER_MILLION_UNITS: ${AI_OUTPUT_MICRO_USD_PER_MILLION_UNITS:-0}
     QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
     QDRANT_API_KEY_FILE: /run/secrets/qdrant-api-key.txt
-    AEONIC_VERSION: 0.7.0
+    AEONIC_VERSION: 0.8.0
   volumes:
     - aeonic-data:/app/data
     - ./secrets:/run/secrets:ro
@@ -50,7 +50,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.edge
-    image: aeonic-edge:0.7.0
+    image: aeonic-edge:0.8.0
     restart: unless-stopped
     environment:
       AEONIC_ORIGIN: ${AEONIC_ORIGIN:-https://localhost}
@@ -100,7 +100,7 @@ services:
       DELIVERY_BASE_URL: ${AEONIC_ORIGIN:-https://localhost}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       DELIVERY_SIGNING_KEYS: ${DELIVERY_SIGNING_KEYS:-}
-      AEONIC_VERSION: 0.7.0
+      AEONIC_VERSION: 0.8.0
       WORKER_ID: worker:compose-primary
     depends_on:
       api:

@@ -110,7 +110,7 @@ const environmentSchema = z.object({
   QDRANT_URL: z.url().default('http://qdrant:6333'),
   QDRANT_API_KEY: z.string().min(1).optional(),
   QDRANT_API_KEY_FILE: z.string().trim().min(1).optional(),
-  AEONIC_VERSION: z.string().trim().min(1).default('0.7.0'),
+  AEONIC_VERSION: z.string().trim().min(1).default('0.8.0'),
 })
 
 export interface AppConfig {

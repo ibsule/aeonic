@@ -6,8 +6,8 @@ developers and small teams.
 
 ## Current status
 
-*Version 0.6* adds an accessible operator experience and a supported Compose deployment to the
-trustworthy API, storage, delivery, and bounded media-processing foundation. It ships:
+*Version 0.8* adds optional semantic retrieval and approval-gated media workflows to the accessible
+operator experience and supported Compose deployment. It ships:
 
 - A Node.js 24 and strict TypeScript 6 workspace.
 - A contract-validated Express 5 API.
@@ -45,9 +45,15 @@ trustworthy API, storage, delivery, and bounded media-processing foundation. It 
 - A read-only `doctor` command with configuration, SQLite, permission, and media-tool diagnostics.
 - A hardened three-service Docker Compose deployment with a Caddy TLS/static edge, internal API,
   internal worker, persistent data volumes, and operator backup/upgrade guidance.
+- Optional hybrid lexical/vector media search with project isolation, privacy controls, budgets,
+  evaluation gates, and a separately activated AI worker.
+- Deterministic, exact-target agent plans with immutable hashes, administrator approval, single-use
+  execution, cancellation, audit history, and worker-side revalidation.
+- An optional project-scoped stdio MCP server whose mutation-capable tool can request human review
+  but cannot approve or execute its own plan.
 
-AI features are **not implemented yet** and remain explicitly optional. The API and worker must both
-be running for uploads to become ready and for queued video/document derivatives to complete.
+AI and agent features remain explicitly optional. The API and worker must both be running for
+uploads to become ready and for queued derivatives or approved agent changes to complete.
 
 ## Requirements
 
@@ -156,6 +162,9 @@ of the runtime.
 ## Docker Compose
 
 The optional AI profile is documented in [Optional semantic search](docs/semantic-search.md). Core services do not require it.
+
+The optional stdio MCP server and its human approval boundary are documented in
+[Approval-gated media workflows](docs/agent-workflows.md).
 
 For a no-CLI-after-installation experience, follow [the Compose deployment guide](./docs/deployment.md).
 It covers secret generation, TLS, first-run setup, diagnostics, backup, and recovery. Review

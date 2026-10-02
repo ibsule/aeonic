@@ -28,12 +28,11 @@ afterEach(() => {
   for (const database of databases.splice(0)) database.close()
 })
 
-function setup() {
+function setup(executedAt = new Date('2026-10-02T10:00:01.000Z')) {
   const database = openDatabase(loadConfig({ NODE_ENV: 'test', DATABASE_PATH: ':memory:' }))
   databases.push(database)
   database.migrate()
   const plannedAt = new Date('2026-10-02T10:00:00.000Z')
-  const executedAt = new Date('2026-10-02T10:00:01.000Z')
   const userId = uuidv7()
   const organizationId = uuidv7()
   const projectId = uuidv7()
@@ -185,6 +184,19 @@ describe('approved agent tool execution', () => {
     assert.equal(
       test.database.db.select().from(agentRuns).where(eq(agentRuns.id, test.runId)).get()?.state,
       'failed',
+    )
+  })
+
+  it('fails closed after the approved wall-time budget is exhausted', async () => {
+    const test = setup(new Date('2026-10-02T10:00:31.000Z'))
+    assert.equal(await test.runner.runOnce(new AbortController().signal), 'failed')
+    assert.equal(
+      test.database.db.select().from(toolExecutions).get()?.errorCode,
+      'wall_time_budget_exceeded',
+    )
+    assert.equal(
+      test.database.db.select().from(assets).where(eq(assets.id, test.assetId)).get()?.name,
+      'Hero',
     )
   })
 })
