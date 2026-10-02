@@ -188,6 +188,7 @@ It covers secret generation, TLS, first-run setup, diagnostics, backup, and reco
 | `pnpm --filter @aeonic/api db:generate` | Generate a reviewed migration after schema changes |
 | `pnpm test` | Run the test suite |
 | `pnpm --filter @aeonic/api test:s3` | Run the opt-in live S3 compatibility contract |
+| `pnpm bench:delivery` | Benchmark 1 MiB local original delivery at 100 requests per second |
 | `pnpm bench:transform` | Benchmark the deterministic 12-megapixel image transform fixture |
 | `pnpm bench:metadata` | Benchmark the authenticated metadata API with 100,000 assets |
 | `pnpm security:audit` | Fail on high or critical production dependency advisories |

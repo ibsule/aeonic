@@ -30,6 +30,17 @@ reference profile.
 warm-up runs. It fails if p95 exceeds two seconds or any output hash differs. Increase
 `BENCHMARK_SAMPLES` for release evidence; the default is ten measured runs.
 
+## Local original delivery
+
+`pnpm bench:delivery` creates a disposable installation, ingests a public 1 MiB original through
+the authenticated upload API, and downloads the complete immutable object 100 times per second for
+20 seconds. It fails on an incorrect body length, any HTTP error, less than 95% of target throughput,
+p95 time-to-first-byte above 100 ms, or request-phase RSS growth above 128 MiB.
+
+The result applies only to local storage on the benchmark host. It does not describe internet,
+proxy, TLS, S3, or client latency. Use `BENCHMARK_DURATION_SECONDS=86400` for a release soak and retain
+the JSON output.
+
 ## Interpretation
 
 - Compare results only when the host, storage backend, runtime, fixture, and benchmark version match.

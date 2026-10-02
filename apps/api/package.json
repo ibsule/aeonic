@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bench:delivery": "node --import tsx bench/delivery-api.ts",
     "bench:metadata": "node --import tsx bench/metadata-api.ts",
     "bench:transform": "node --import tsx bench/image-transform.ts",
     "build": "pnpm clean && tsc -b",
