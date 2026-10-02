@@ -10,6 +10,13 @@ object volume. Only Caddy publishes host ports.
 2. Copy `.env.compose.example` to `.env`.
 3. Set `AEONIC_ORIGIN` to the final HTTPS origin. Caddy obtains a public certificate when this is a
    resolvable domain. The `https://localhost` default uses Caddy’s local CA and is for evaluation.
+   The read-only edge intentionally does not install that CA into any trust store. If local browser
+   trust is needed, copy `/data/caddy/pki/authorities/local/root.crt` from the edge container and
+   explicitly trust it on the development host; remove that trust when evaluation ends.
+
+   ```bash
+   docker compose cp edge:/data/caddy/pki/authorities/local/root.crt ./aeonic-local-root.crt
+   ```
 4. Generate independent secrets:
 
    ```bash
