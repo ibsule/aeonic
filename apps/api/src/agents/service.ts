@@ -4,6 +4,7 @@ import type {
   AgentRun,
   ApprovalDecisionRequest,
   ApprovalRequest,
+  CancelAgentRunRequest,
 } from '@aeonic/contracts'
 import type { OrganizationRole } from '../authorization/policy.js'
 import { ApiError } from '../http/api-error.js'
@@ -164,6 +165,47 @@ export class AgentWorkflowService {
       return toRun(run)
     } catch (error) {
       if (error instanceof AgentWorkflowConflictError) throw conflict(error)
+      throw error
+    }
+  }
+
+  getRun(actorId: string, scope: TenantScope, runId: string): AgentRun {
+    this.authorize(actorId, scope)
+    const run = this.repository.findRun(scope, runId)
+    if (!run) {
+      throw new ApiError(
+        404,
+        'Agent run not found',
+        'agent_run_not_found',
+        'The run does not exist.',
+      )
+    }
+    return toRun(run)
+  }
+
+  cancelRun(
+    actorId: string,
+    scope: TenantScope,
+    runId: string,
+    input: CancelAgentRunRequest,
+    requestId: string,
+    now = new Date(),
+  ): AgentRun {
+    this.authorize(actorId, scope)
+    try {
+      return toRun(this.repository.cancelRun(scope, runId, actorId, now, requestId, input.reason))
+    } catch (error) {
+      if (error instanceof AgentWorkflowConflictError) {
+        if (error.code === 'run_not_found') {
+          throw new ApiError(
+            404,
+            'Agent run not found',
+            'agent_run_not_found',
+            'The run does not exist.',
+          )
+        }
+        throw conflict(error)
+      }
       throw error
     }
   }

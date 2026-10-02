@@ -7,7 +7,7 @@ import { buildApp } from '../src/app.js'
 import { createAuth } from '../src/auth/auth.js'
 import { loadConfig } from '../src/config.js'
 import { type DatabaseConnection, openDatabase } from '../src/db/database.js'
-import { assets, assetVersions, user } from '../src/db/schema.js'
+import { assets, assetVersions, jobs, toolExecutions, user } from '../src/db/schema.js'
 
 const databases: DatabaseConnection[] = []
 afterEach(() => {
@@ -127,7 +127,7 @@ async function setup() {
     expiresAt: new Date(now.getTime() + 60_000),
     now,
   })
-  return { app, agent, scope, frozen }
+  return { app, agent, database, scope, frozen }
 }
 
 describe('agent approval API', () => {
@@ -167,5 +167,35 @@ describe('agent approval API', () => {
       .send({ planHash: test.frozen.plan.planHash })
     assert.equal(replay.status, 409)
     assert.equal(replay.body.code, 'approval_not_usable')
+  })
+
+  it('lets an operator cancel queued approved work idempotently', async () => {
+    const test = await setup()
+    const approvalsBase = `/api/v1/organizations/${test.scope.organizationId}/projects/${test.scope.projectId}/agent-approvals`
+    const runsBase = `/api/v1/organizations/${test.scope.organizationId}/projects/${test.scope.projectId}/agent-runs`
+    await test.agent
+      .post(`${approvalsBase}/${test.frozen.approval.id}/decision`)
+      .send({ decision: 'approved' })
+    await test.agent
+      .post(`${approvalsBase}/${test.frozen.approval.id}/execute`)
+      .send({ planHash: test.frozen.plan.planHash })
+
+    const cancelled = await test.agent
+      .post(`${runsBase}/${test.frozen.plan.runId}/cancel`)
+      .send({ reason: 'Operator stopped this before the worker ran.' })
+    assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body))
+    assert.equal(cancelled.body.state, 'cancelled')
+    assert.equal(test.database.db.select().from(toolExecutions).get()?.state, 'cancelled')
+    assert.equal(test.database.db.select().from(jobs).get()?.state, 'cancelled')
+
+    const replay = await test.agent
+      .post(`${runsBase}/${test.frozen.plan.runId}/cancel`)
+      .send({ reason: 'Repeated client request.' })
+    assert.equal(replay.status, 200)
+    assert.equal(replay.body.cancelledAt, cancelled.body.cancelledAt)
+
+    const status = await test.agent.get(`${runsBase}/${test.frozen.plan.runId}`)
+    assert.equal(status.status, 200)
+    assert.equal(status.body.state, 'cancelled')
   })
 })

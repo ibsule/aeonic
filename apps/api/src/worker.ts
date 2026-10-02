@@ -1,5 +1,6 @@
 import { hostname } from 'node:os'
 import sharp from 'sharp'
+import { AgentToolExecutionHandler } from './agents/execution-handler.js'
 import { ConfigurationError, loadConfig } from './config.js'
 import { type DatabaseConnection, openDatabase } from './db/database.js'
 import { SqliteJobRepository } from './jobs/repository.js'
@@ -78,6 +79,7 @@ async function start(): Promise<void> {
     mediaLimits,
   )
   const mediaDerivatives = new MediaDerivativeHandler(database, storage, config)
+  const agentExecution = new AgentToolExecutionHandler(database)
   const workerId = config.workerId ?? derivedWorkerId()
   const runner = new JobRunner(
     new SqliteJobRepository(database),
@@ -86,6 +88,7 @@ async function start(): Promise<void> {
       ['media.inspect.video', videoInspection.handle],
       ['media.inspect.document', documentInspection.handle],
       ['media.derive', mediaDerivatives.handle],
+      ['agent.execute_tool', agentExecution.handle],
     ]),
     {
       workerId,
@@ -123,6 +126,7 @@ async function start(): Promise<void> {
         'media.inspect.video',
         'media.inspect.document',
         'media.derive',
+        'agent.execute_tool',
       ],
       sharp: sharp.versions.sharp,
       libvips: sharp.versions.vips,

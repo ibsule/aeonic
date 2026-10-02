@@ -1,4 +1,4 @@
-import { and, asc, eq, or } from 'drizzle-orm'
+import { and, asc, eq, inArray, or } from 'drizzle-orm'
 import type {
   AgentPlanBudget,
   AgentRiskClass,
@@ -15,6 +15,7 @@ import {
   assets,
   assetVersions,
   auditEvents,
+  jobs,
   toolExecutions,
 } from '../db/schema.js'
 import type { TenantScope } from '../repositories/types.js'
@@ -509,10 +510,11 @@ export class SqliteAgentWorkflowRepository {
         )
       }
       for (const call of plan.toolCalls) {
+        const executionId = uuidv7()
         this.database.db
           .insert(toolExecutions)
           .values({
-            id: uuidv7(),
+            id: executionId,
             organizationId: scope.organizationId,
             projectId: scope.projectId,
             runId: plan.runId,
@@ -523,6 +525,21 @@ export class SqliteAgentWorkflowRepository {
             argumentsHash: hashAgentPlan(call.arguments),
             idempotencyKey: hashAgentPlan({ planHash: plan.planHash, callId: call.id }),
             createdAt: now,
+          })
+          .run()
+        this.database.db
+          .insert(jobs)
+          .values({
+            id: executionId,
+            organizationId: scope.organizationId,
+            projectId: scope.projectId,
+            type: 'agent.execute_tool',
+            payload: { executionId, planHash: plan.planHash },
+            maxAttempts: plan.budget.maxRetries + 1,
+            runAfter: now,
+            createdBy: approval.decidedBy,
+            createdAt: now,
+            updatedAt: now,
           })
           .run()
       }
@@ -567,6 +584,130 @@ export class SqliteAgentWorkflowRepository {
     )
   }
 
+  cancelRun(
+    scope: TenantScope,
+    runId: string,
+    actorId: string,
+    now: Date,
+    requestId: string,
+    reason?: string,
+  ): AgentRunRecord {
+    const transaction = this.database.client.transaction(() => {
+      const run = this.findRun(scope, runId)
+      if (!run) {
+        throw new AgentWorkflowConflictError('run_not_found', 'The agent run does not exist.')
+      }
+      if (run.state === 'cancelled') return run
+      if (run.state === 'succeeded' || run.state === 'failed') {
+        throw new AgentWorkflowConflictError(
+          'run_already_finished',
+          'A completed agent run cannot be cancelled.',
+        )
+      }
+      const changed = this.database.db
+        .update(agentRuns)
+        .set({ state: 'cancelled', updatedAt: now, completedAt: now, cancelledAt: now })
+        .where(
+          and(
+            eq(agentRuns.id, runId),
+            eq(agentRuns.organizationId, scope.organizationId),
+            eq(agentRuns.projectId, scope.projectId),
+            or(
+              eq(agentRuns.state, 'planning'),
+              eq(agentRuns.state, 'awaiting_approval'),
+              eq(agentRuns.state, 'executing'),
+            ),
+          ),
+        )
+        .run()
+      if (changed.changes !== 1) {
+        throw new AgentWorkflowConflictError(
+          'run_cancel_race_lost',
+          'The agent run changed before it could be cancelled.',
+        )
+      }
+      const plan = this.findPlanByRun(scope, runId)
+      if (plan) {
+        this.database.db
+          .update(approvalRequests)
+          .set({ state: 'cancelled' })
+          .where(
+            and(
+              eq(approvalRequests.planId, plan.id),
+              eq(approvalRequests.organizationId, scope.organizationId),
+              eq(approvalRequests.projectId, scope.projectId),
+              eq(approvalRequests.state, 'pending'),
+            ),
+          )
+          .run()
+      }
+      const executions = this.database.db
+        .select()
+        .from(toolExecutions)
+        .where(
+          and(
+            eq(toolExecutions.runId, runId),
+            eq(toolExecutions.organizationId, scope.organizationId),
+            eq(toolExecutions.projectId, scope.projectId),
+            or(eq(toolExecutions.state, 'queued'), eq(toolExecutions.state, 'running')),
+          ),
+        )
+        .all()
+      for (const execution of executions) {
+        this.database.db
+          .update(toolExecutions)
+          .set({
+            state: 'cancelled',
+            startedAt: execution.startedAt ?? now,
+            completedAt: now,
+            errorCode: 'run_cancelled',
+          })
+          .where(eq(toolExecutions.id, execution.id))
+          .run()
+      }
+      if (executions.length > 0) {
+        this.database.db
+          .update(jobs)
+          .set({
+            state: 'cancelled',
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            errorCode: 'run_cancelled',
+            errorMessage: 'The operator cancelled the agent run.',
+            updatedAt: now,
+            completedAt: now,
+          })
+          .where(
+            and(
+              inArray(
+                jobs.id,
+                executions.map((execution) => execution.id),
+              ),
+              or(eq(jobs.state, 'queued'), eq(jobs.state, 'running')),
+            ),
+          )
+          .run()
+      }
+      this.database.db
+        .insert(auditEvents)
+        .values({
+          id: uuidv7(),
+          ...scope,
+          actorType: 'user',
+          actorId,
+          action: 'agent.run_cancelled',
+          targetType: 'agent_run',
+          targetId: runId,
+          requestId,
+          summary: { planId: plan?.id ?? null, reason: reason?.trim() || null },
+          createdAt: now,
+        })
+        .run()
+      return this.findRun(scope, runId)
+    })
+    return transaction.immediate() as AgentRunRecord
+  }
+
   private expirePending(scope: TenantScope, now: Date): void {
     this.database.client
       .prepare(
@@ -577,10 +718,7 @@ export class SqliteAgentWorkflowRepository {
       .run(scope.organizationId, scope.projectId, now.getTime())
   }
 
-  private assertTargetsCurrent(
-    scope: TenantScope,
-    snapshots: readonly AgentTargetSnapshot[],
-  ): void {
+  assertTargetsCurrent(scope: TenantScope, snapshots: readonly AgentTargetSnapshot[]): void {
     for (const snapshot of snapshots) {
       const target = this.database.db
         .select({

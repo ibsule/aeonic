@@ -350,3 +350,14 @@ export const consumeApprovalRequestSchema = {
   required: ['planHash'],
   properties: { planHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
 } as const
+
+export interface CancelAgentRunRequest {
+  reason?: string
+}
+
+export const cancelAgentRunRequestSchema = {
+  $id: 'CancelAgentRunRequest',
+  type: 'object',
+  additionalProperties: false,
+  properties: { reason: { type: 'string', minLength: 1, maxLength: 1000 } },
+} as const

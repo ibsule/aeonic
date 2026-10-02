@@ -6,6 +6,8 @@ import {
   type ConsumeApprovalRequest,
   consumeApprovalRequestSchema,
   approvalRequestSchema,
+  type CancelAgentRunRequest,
+  cancelAgentRunRequestSchema,
 } from '@aeonic/contracts'
 import { type Request, Router } from 'express'
 import type { AgentWorkflowService } from '../agents/service.js'
@@ -85,6 +87,39 @@ export function createAgentWorkflowsRouter(
         scope(request),
         parameter(request, 'approvalId'),
         request.body.planHash,
+        String(request.id),
+      ),
+    )
+  })
+
+  const runsBase = '/organizations/:organizationId/projects/:projectId/agent-runs'
+  router.get(`${runsBase}/:runId`, (request, response) => {
+    response.set('cache-control', 'no-store')
+    return sendJson(
+      response,
+      200,
+      agentRunSchema,
+      workflows.getRun(
+        getUserPrincipal(request).userId,
+        scope(request),
+        parameter(request, 'runId'),
+      ),
+    )
+  })
+
+  router.post(`${runsBase}/:runId/cancel`, (request, response) => {
+    if (!matchesSchema<CancelAgentRunRequest>(cancelAgentRunRequestSchema, request.body)) {
+      throw new ApiError(400, 'Invalid request', 'invalid_request', 'The cancellation is invalid.')
+    }
+    return sendJson(
+      response,
+      200,
+      agentRunSchema,
+      workflows.cancelRun(
+        getUserPrincipal(request).userId,
+        scope(request),
+        parameter(request, 'runId'),
+        request.body,
         String(request.id),
       ),
     )
