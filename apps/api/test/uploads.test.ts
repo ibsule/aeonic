@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -139,6 +140,74 @@ describe('simple uploads', () => {
     assert.equal(replay.headers['idempotency-replayed'], 'true')
     assert.equal(replay.body.uploadId, first.body.uploadId)
     assert.equal(database.client.prepare('select count(*) from assets').pluck().get(), 1)
+  })
+
+  it('accepts five concurrent uploads without losing reservations or jobs', async () => {
+    const { app, database } = createTestApp()
+    const owner = await initializeOwner(app)
+    const path = uploadPath(owner.organizationId, owner.projectId)
+    const key = await owner.agent
+      .post(`/api/v1/organizations/${owner.organizationId}/projects/${owner.projectId}/api-keys`)
+      .send({ name: 'Concurrent uploader', scopes: ['assets:write'] })
+      .expect(201)
+    const server = app.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const settled = await (async () => {
+      try {
+        return await Promise.allSettled(
+          Array.from({ length: 5 }, (_, index) =>
+            request(server)
+              .post(path)
+              .set('x-api-key', key.body.secret)
+              .query({ filename: `concurrent-${index + 1}.png` })
+              .set('content-type', 'image/png')
+              .set('idempotency-key', `concurrent-upload-${index + 1}`)
+              .send(png),
+          ),
+        )
+      } finally {
+        server.close()
+        await once(server, 'close')
+      }
+    })()
+    const failures = settled.flatMap((result) =>
+      result.status === 'rejected'
+        ? [
+            {
+              code:
+                result.reason instanceof Error && 'code' in result.reason
+                  ? result.reason.code
+                  : undefined,
+              message:
+                result.reason instanceof Error ? result.reason.message : String(result.reason),
+              stack: result.reason instanceof Error ? result.reason.stack : undefined,
+            },
+          ]
+        : [],
+    )
+    assert.deepEqual(failures, [])
+    const responses = settled.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    )
+
+    assert.deepEqual(
+      responses.map((response) => response.status),
+      [201, 201, 201, 201, 201],
+    )
+    assert.equal(new Set(responses.map((response) => response.body.assetId)).size, 5)
+    assert.equal(database.client.prepare('select count(*) from assets').pluck().get(), 5)
+    assert.equal(database.client.prepare('select count(*) from uploads').pluck().get(), 5)
+    assert.equal(database.client.prepare('select count(*) from jobs').pluck().get(), 5)
+    assert.equal(
+      database.client
+        .prepare(
+          "select coalesce(sum(expected_bytes), 0) from uploads where state in ('created', 'receiving', 'validating')",
+        )
+        .pluck()
+        .get(),
+      0,
+    )
+    assert.deepEqual(database.client.pragma('foreign_key_check'), [])
   })
 
   it('rejects mismatched content and removes the stored object', async () => {
