@@ -1,5 +1,9 @@
 # Aeonic
 
+[![Aeonic architecture showing the core media path and optional intelligence services](docs/assets/aeonic-architecture.svg)](docs/assets/aeonic-architecture.svg)
+
+[Open the editable Excalidraw source](docs/assets/aeonic-architecture.excalidraw).
+
 Aeonic is an open-source, self-hosted media platform for storing, processing, finding, and
 delivering images, videos, PDFs, and office documents.
 
@@ -9,9 +13,11 @@ the core product.
 
 *Version 1.0.0-rc.2*
 
-> **Release status:** `1.0.0-rc.2` is a hardened release candidate, not the final v1 release. Core
-> local verification is complete; hosted release, independent review, ARM64 hardware, and extended
-> operational acceptance gates remain open.
+**Status: stable release candidate.**
+
+Aeonic is feature-complete for its v1 scope and has passed its local release, security, upgrade,
+performance, and compatibility gates. The final v1 tag is awaiting hosted and independent release
+acceptance; core product development is not blocked by those external checks.
 
 ## What Aeonic does
 
@@ -171,11 +177,9 @@ remain available without an external provider or vector database.
 - [Approval-gated media workflows](docs/agent-workflows.md) explains immutable plans, human
   approval, exact-target execution, and the optional MCP server.
 
-## Architecture at a glance
+## Deployment model
 
 The supported Compose deployment contains three production services:
-
-[![Aeonic architecture showing the core media path and optional intelligence services](docs/assets/aeonic-architecture.svg)](docs/assets/aeonic-architecture.svg)
 
 - **Edge:** Caddy terminates TLS, serves the dashboard, and proxies API traffic.
 - **API:** Express provides authentication, project control, uploads, delivery, and job
