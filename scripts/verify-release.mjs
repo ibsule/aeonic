@@ -6,12 +6,18 @@ const read = (path) => readFile(new URL(path, root), 'utf8')
 const parsePackage = async (path) => JSON.parse(await read(path))
 const requiredDocuments = [
   'CHANGELOG.md',
+  'docs/README.md',
+  'docs/architecture.md',
+  'docs/authentication.md',
   'docs/api-stability.md',
+  'docs/configuration.md',
   'docs/deployment.md',
+  'docs/getting-started.md',
   'docs/performance.md',
   'docs/release-checklist.md',
   'docs/security-verification.md',
   'docs/support-matrix.md',
+  'docs/troubleshooting.md',
   'docs/upgrade.md',
   'SECURITY.md',
 ]

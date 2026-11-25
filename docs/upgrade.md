@@ -28,7 +28,7 @@ evidence until a restoration rehearsal succeeds on a separate disposable Compose
 
 ```bash
 git fetch --tags
-git checkout <reviewed-release-tag>
+git checkout v1.0.0
 docker compose build
 docker compose run --rm worker --enable-source-maps dist/doctor.js
 docker compose up -d

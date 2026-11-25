@@ -1,8 +1,6 @@
 # Aeonic
 
-[![Aeonic architecture showing the core media path and optional intelligence services](docs/assets/aeonic-architecture.svg)](docs/assets/aeonic-architecture.svg)
-
-[Open the editable Excalidraw source](docs/assets/aeonic-architecture.excalidraw).
+[![Aeonic architecture showing the core media path and optional intelligence services](docs/assets/aeonic-architecture.png)](docs/assets/aeonic-architecture.png)
 
 Aeonic is an open-source, self-hosted media platform for storing, processing, finding, and
 delivering images, videos, PDFs, and office documents.
@@ -167,35 +165,18 @@ shapes rather than copying identifiers from examples.
 
 Public compatibility guarantees are defined in [API stability and deprecation](docs/api-stability.md).
 
-## Optional intelligence
-
-AI features are disabled by default. Core upload, catalog, transformation, search, and delivery
-remain available without an external provider or vector database.
-
-- [Optional semantic search](docs/semantic-search.md) explains provider configuration, privacy,
-  spend ceilings, index evaluation, activation, and rollback.
-- [Approval-gated media workflows](docs/agent-workflows.md) explains immutable plans, human
-  approval, exact-target execution, and the optional MCP server.
-
-## Deployment model
-
-The supported Compose deployment contains three production services:
-
-- **Edge:** Caddy terminates TLS, serves the dashboard, and proxies API traffic.
-- **API:** Express provides authentication, project control, uploads, delivery, and job
-  coordination.
-- **Worker:** a separate process inspects media and produces bounded image, video, PDF, and office
-  derivatives.
-
-SQLite and local object data live on persistent storage shared by the API and worker. S3-compatible
-object storage is optional. The API and worker are internal services; only the edge publishes host
-ports.
 
 ## Documentation
 
 | Goal | Guide |
 | --- | --- |
+| Find the right guide | [Documentation index](docs/README.md) |
+| Install Aeonic for the first time | [Getting started](docs/getting-started.md) |
+| Understand the system design | [Architecture](docs/architecture.md) |
+| Configure the runtime | [Configuration reference](docs/configuration.md) |
+| Understand sessions, roles, and API keys | [Authentication and authorization](docs/authentication.md) |
 | Deploy and operate Aeonic | [Docker Compose deployment](docs/deployment.md) |
+| Diagnose a problem | [Troubleshooting](docs/troubleshooting.md) |
 | Upgrade, restore, or roll back | [Upgrade and rollback](docs/upgrade.md) |
 | Understand supported environments and media | [Support matrix](docs/support-matrix.md) |
 | Configure optional semantic retrieval | [Optional semantic search](docs/semantic-search.md) |
