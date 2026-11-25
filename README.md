@@ -175,6 +175,8 @@ remain available without an external provider or vector database.
 
 The supported Compose deployment contains three production services:
 
+[![Aeonic architecture showing the core media path and optional intelligence services](docs/assets/aeonic-architecture.svg)](docs/assets/aeonic-architecture.svg)
+
 - **Edge:** Caddy terminates TLS, serves the dashboard, and proxies API traffic.
 - **API:** Express provides authentication, project control, uploads, delivery, and job
   coordination.
