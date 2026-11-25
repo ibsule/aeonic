@@ -7,8 +7,6 @@ notice. The dashboard and MCP adapter are clients of the same documented service
 ## Versioning policy
 
 - Aeonic follows Semantic Versioning for the application, container images, and OpenAPI `info.version`.
-- Before 1.0, a minor release may intentionally change a public contract, but release notes and an
-  upgrade path are required.
 - Starting at 1.0, compatible additions and optional fields may ship in a minor release. Breaking
   changes require a major release unless they close an actively exploitable vulnerability.
 - Patch releases contain compatible fixes. Clients must ignore unknown response fields.

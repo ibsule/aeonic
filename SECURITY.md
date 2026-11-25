@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Aeonic is pre-1.0. Security fixes are applied to the latest release on `main`; older development
-snapshots are not supported.
+Security fixes are applied to the latest v1 release on `main`. Release candidates and older
+development snapshots are not supported after the corresponding stable release is available.
 
 ## Reporting a vulnerability
 

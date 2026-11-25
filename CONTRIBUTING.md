@@ -1,7 +1,7 @@
 # Contributing to Aeonic
 
-Aeonic is pre-1.0 and is being built in gated milestones. Please keep changes focused, tested, and
-consistent with the currently shipped scope.
+Aeonic is a stable v1 project. Keep changes focused, tested, and consistent with the documented
+compatibility and support policies.
 
 ## Set up the workspace
 
@@ -65,9 +65,9 @@ gate.
 
 ## Releases
 
-Aeonic follows Semantic Versioning. Before 1.0, minor releases may contain intentional contract
-changes, but every breaking change requires release notes and a migration path. Patch releases are
-reserved for compatible fixes and documentation changes.
+Aeonic follows Semantic Versioning. Compatible capabilities ship in minor releases. Breaking public
+contracts require a major release unless an urgent security or data-integrity restriction is
+necessary. Patch releases are reserved for compatible fixes and documentation changes.
 
 A release must:
 

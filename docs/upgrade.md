@@ -57,7 +57,7 @@ sync. Treat them as one recovery unit.
 
 ## Restoration rehearsal record
 
-For each release candidate, record:
+For each release, record:
 
 - Source release and image digests, database size, object count, and archive SHA-256.
 - Restore host architecture, Docker/Compose versions, start and finish times, and recovery duration.

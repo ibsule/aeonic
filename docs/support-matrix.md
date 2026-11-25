@@ -1,6 +1,6 @@
 # Support matrix
 
-This matrix defines the v1 release-candidate test surface. “Supported” means defects are accepted
+This matrix defines the stable v1 support surface. “Supported” means defects are accepted
 when the installation follows the documented configuration; it does not replace provider or
 operating-system support policies.
 

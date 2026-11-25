@@ -1,7 +1,47 @@
 # Changelog
 
-Aeonic follows Semantic Versioning. Before the final 1.0 release, release candidates may still
-change in response to security review, independent installation feedback, or release-gate findings.
+Aeonic follows Semantic Versioning. Starting with v1, breaking public API changes require a major
+release except when an urgent security or data-integrity restriction is necessary.
+
+## 1.0.0 - 2026-11-25
+
+First stable release of Aeonic.
+
+### Added
+
+- A self-hosted media workspace for images, videos, PDFs, and supported office documents.
+- Tenant-isolated organizations and projects, browser sessions, project API keys, roles, audit
+  history, storage quotas, and OpenAPI 3.1 documentation.
+- Simple and tus resumable uploads, local and S3-compatible storage, immutable originals, signed
+  delivery, byte ranges, deterministic image transformations, and durable media derivatives.
+- A hardened Docker Compose topology with separate Caddy edge, Express API, and media-worker images
+  for `linux/amd64` and `linux/arm64`.
+- Optional semantic search and approval-gated media workflow agents that remain outside the core
+  availability path.
+- Operator documentation for installation, architecture, configuration, authentication,
+  troubleshooting, backup, upgrade, security, compatibility, and performance verification.
+
+### Compatibility
+
+- Docker Compose is the supported production deployment for v1.
+- SQLite is the authoritative control plane; active-active API replicas are unsupported.
+- The versioned REST API follows the guarantees in `docs/api-stability.md`.
+- ZIP archives are not catalog assets in v1.
+
+### Security
+
+- Updated Better Auth, Express, Sharp, the Model Context Protocol SDK, Zod, Vite, Vitest, and
+  affected transitive middleware to patched releases.
+- Verified the production dependency graph reports no known vulnerabilities before the v1 source
+  checkpoint.
+
+### Upgrade notes
+
+- Installations running either v1 release candidate can upgrade through the normal forward migration
+  path after creating and restoration-testing a complete database-and-object backup.
+- Rollback requires the matching pre-upgrade database and object state; database downgrades are not
+  supported.
+- Read `docs/upgrade.md` before changing an existing installation.
 
 ## 1.0.0-rc.2 - 2026-10-02
 

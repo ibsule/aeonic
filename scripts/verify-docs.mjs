@@ -1,6 +1,6 @@
-import { readFile, readdir, stat } from 'node:fs/promises'
-import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { readdir, readFile, stat } from 'node:fs/promises'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -39,8 +39,10 @@ function declaredEnvironment(content) {
 }
 
 const files = await markdownFiles(root)
+const markdown = new Map()
 for (const filename of files) {
   const content = await readFile(filename, 'utf8')
+  markdown.set(filename, content)
   const fenceCount = (content.match(/^```/gm) ?? []).length
   if (fenceCount % 2 !== 0) errors.push(`${relative(filename)} has an unclosed code fence.`)
 
@@ -104,14 +106,93 @@ for (const role of ['owner', 'admin', 'developer', 'viewer']) {
 }
 
 const compose = await readFile(path.join(root, 'compose.yaml'), 'utf8')
-for (const service of ['edge:', 'api:', 'worker:']) {
-  if (!compose.includes(`  ${service}`))
-    errors.push(`compose.yaml is missing documented service ${service}`)
+const composeServices = ['edge', 'api', 'worker', 'qdrant', 'ai-worker']
+for (const service of composeServices) {
+  const declaration = `${service}:`
+  if (!compose.includes(`  ${declaration}`))
+    errors.push(`compose.yaml is missing documented service ${service}.`)
 }
 for (const command of ['dist/doctor.js', 'docker compose config --quiet', 'docker compose ps']) {
-  const documented = await Promise.all(files.map((file) => readFile(file, 'utf8')))
-  if (!documented.some((content) => content.includes(command))) {
+  if (![...markdown.values()].some((content) => content.includes(command))) {
     errors.push(`Required operator instruction is not documented: ${command}.`)
+  }
+}
+
+const rootPackage = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+const workspacePackages = new Map()
+for (const manifest of [
+  'apps/api/package.json',
+  'apps/dashboard/package.json',
+  'packages/contracts/package.json',
+]) {
+  const parsed = JSON.parse(await readFile(path.join(root, manifest), 'utf8'))
+  workspacePackages.set(parsed.name, parsed)
+}
+const pnpmBuiltins = new Set([
+  'add',
+  'audit',
+  'deploy',
+  'dlx',
+  'exec',
+  'install',
+  'list',
+  'rebuild',
+  'remove',
+  'run',
+  'update',
+  'why',
+])
+for (const [filename, content] of markdown) {
+  for (const block of shellBlocks(content)) {
+    for (const match of block.matchAll(/\bpnpm\s+(?:--filter\s+(\S+)\s+)?([a-z][a-z0-9:-]*)/g)) {
+      const filter = match[1]?.replace(/\.\.\.$/, '')
+      const command = match[2]
+      if (pnpmBuiltins.has(command)) continue
+      const manifest = filter ? workspacePackages.get(filter) : rootPackage
+      if (!manifest) {
+        errors.push(`${relative(filename)} uses unknown pnpm workspace filter ${filter}.`)
+      } else if (!Object.hasOwn(manifest.scripts ?? {}, command)) {
+        errors.push(
+          `${relative(filename)} uses missing ${filter ?? 'root'} package script ${command}.`,
+        )
+      }
+    }
+  }
+}
+
+const documentedComposeServices = new Set()
+for (const content of markdown.values()) {
+  for (const match of content.matchAll(
+    /docker compose (?:cp|logs|run|stop)[^\n\\]*(?:\\\n[^\n]*)*/g,
+  )) {
+    for (const service of composeServices) {
+      if (new RegExp(`(?:^|[\\s])${service}(?=[:\\s]|$)`).test(match[0])) {
+        documentedComposeServices.add(service)
+      }
+    }
+  }
+}
+for (const service of documentedComposeServices) {
+  if (!compose.includes(`  ${service}:`)) {
+    errors.push(`Documentation uses missing Compose service ${service}.`)
+  }
+}
+
+const gettingStarted = await readFile(path.join(root, 'docs/getting-started.md'), 'utf8')
+const canonicalRepository = 'https://github.com/ibsule/aeonic.git'
+if (!gettingStarted.includes(`git clone ${canonicalRepository}`)) {
+  errors.push(`docs/getting-started.md does not use the canonical repository URL.`)
+}
+const upgrade = await readFile(path.join(root, 'docs/upgrade.md'), 'utf8')
+if (!upgrade.includes(`git checkout v${rootPackage.version}`)) {
+  errors.push(`docs/upgrade.md does not target v${rootPackage.version}.`)
+}
+for (const source of ['apps/api/src/doctor.ts', 'apps/api/src/mcp.ts']) {
+  try {
+    const details = await stat(path.join(root, source))
+    if (!details.isFile()) errors.push(`Documented runtime entry point is not a file: ${source}.`)
+  } catch {
+    errors.push(`Documentation references a runtime entry point without source: ${source}.`)
   }
 }
 
@@ -120,6 +201,6 @@ if (errors.length > 0) {
   process.exitCode = 1
 } else {
   process.stdout.write(
-    `Documentation verified: ${files.length} Markdown files, local links, shell syntax, configuration names, roles, scopes, and core Compose instructions.\n`,
+    `Documentation verified: ${files.length} Markdown files, local links, shell syntax, pnpm scripts, Compose services, release version, repository URL, configuration names, roles, scopes, and runtime entry points.\n`,
   )
 }

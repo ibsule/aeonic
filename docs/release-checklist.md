@@ -1,6 +1,6 @@
 # Release checklist
 
-Use one copy of this checklist for each release candidate. Store evidence outside the source tree or
+Use one copy of this checklist for each release. Store evidence outside the source tree or
 in the release system; do not commit credentials, customer data, or private review material.
 
 ## Candidate identity
@@ -36,7 +36,7 @@ in the release system; do not commit credentials, customer data, or private revi
 
 ## Independent security review
 
-- [ ] A reviewer who did not implement the release candidate tests authentication, authorization,
+- [ ] A reviewer who did not implement the release tests authentication, authorization,
       tenant isolation, uploads, media subprocesses, signed delivery, agent approvals, and the image
       supply chain.
 - [ ] Findings include severity, reproduction, affected versions, owner, disposition, and retest.
@@ -45,8 +45,9 @@ in the release system; do not commit credentials, customer data, or private revi
 
 ## Independent installation feedback
 
-Final v1 requires at least five installations performed independently of the maintainer. Do not
-count repeated installs by one person or an install performed through the maintainer's own shell.
+Major releases should include at least five installations performed independently of the maintainer.
+Do not count repeated installs by one person or an install performed through the maintainer's own
+shell.
 
 | Install | Operator/reference | Architecture and host | Fresh or upgrade | Result | Evidence location |
 | --- | --- | --- | --- | --- | --- |
@@ -67,5 +68,5 @@ without assistance. Remove personal or infrastructure secrets before sharing res
 - [ ] Deferred non-blocking findings have owners and target releases.
 - [ ] The project owner records `release`, `hold`, or `reject` with date and rationale.
 
-Do not rename an incomplete candidate as final merely to satisfy the checklist. Publish it as a
-prerelease, fix the evidence gap, and repeat affected gates.
+The version in the source tree is not evidence that publication gates passed. Do not tag, publish,
+or announce a release until mandatory evidence is complete; fix any gap and repeat affected gates.

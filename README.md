@@ -9,13 +9,12 @@ It gives individual developers and small teams one workspace for media operation
 REST API, transformation URLs, and optional media intelligence—without making AI a dependency of
 the core product.
 
-*Version 1.0.0-rc.2*
+*Version 1.0.0*
 
-**Status: stable release candidate.**
+**Status: stable v1 release.**
 
-Aeonic is feature-complete for its v1 scope and has passed its local release, security, upgrade,
-performance, and compatibility gates. The final v1 tag is awaiting hosted and independent release
-acceptance; core product development is not blocked by those external checks.
+Aeonic is feature-complete for its documented v1 scope. The release is designed for a single
+Docker Compose host and keeps optional intelligence outside the critical media path.
 
 ## What Aeonic does
 
@@ -184,7 +183,7 @@ Public compatibility guarantees are defined in [API stability and deprecation](d
 | Understand compatibility guarantees | [API stability and deprecation](docs/api-stability.md) |
 | Review security controls and manual gates | [Security verification](docs/security-verification.md) |
 | Reproduce performance checks | [Performance verification](docs/performance.md) |
-| Evaluate a release candidate | [Release checklist](docs/release-checklist.md) |
+| Evaluate a release | [Release checklist](docs/release-checklist.md) |
 | Review user-visible release changes | [Changelog](CHANGELOG.md) |
 
 ## Repository layout

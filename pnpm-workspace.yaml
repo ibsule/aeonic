@@ -5,7 +5,15 @@ packages:
 injectWorkspacePackages: true
 
 overrides:
+  body-parser: 2.4.0
   esbuild: 0.28.2
+  fast-uri: 3.1.9
+  proxy-addr: 2.0.8
+  qs: 6.16.1
+  source-map-js: 1.2.2
+  undici: 8.12.2
+  vitest: 4.1.12
+  zod: 4.6.7
 
 allowBuilds:
   '@prisma/client': false

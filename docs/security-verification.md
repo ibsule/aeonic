@@ -42,7 +42,7 @@ assessment must use the canonical [OWASP ASVS 5.0 release](https://github.com/OW
 2. Have an independent reviewer focus on authentication, tenant isolation, signed delivery, uploads,
    media subprocess boundaries, agent approvals, and supply-chain workflows.
 3. Exercise traversal, cross-project access, secret leakage, replay, stale approval, range parsing,
-   cache isolation, worker crash, and expired-lease scenarios against the release candidate.
+   cache isolation, worker crash, and expired-lease scenarios against the release build.
 4. Run a deployed TLS and security-header assessment at the final HTTPS origin.
 5. Store the tested commit, image digests, SBOM/provenance verification, signatures, raw scan outputs,
    and reviewer findings with the release evidence.
