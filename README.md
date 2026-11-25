@@ -1,226 +1,225 @@
 # Aeonic
 
-Aeonic is an open-source, self-hosted media platform in active development. The intended product
-will provide storage, transformation, delivery, and optional media intelligence for individual
-developers and small teams.
+Aeonic is an open-source, self-hosted media platform for storing, processing, finding, and
+delivering images, videos, PDFs, and office documents.
 
-## Current status
+It gives individual developers and small teams one workspace for media operations, a versioned
+REST API, transformation URLs, and optional media intelligence—without making AI a dependency of
+the core product.
 
-*Version 1.0.0-rc.2* is the hardened v1 release candidate. It combines optional
-semantic retrieval and approval-gated media workflows with reproducible performance, security,
-supply-chain, upgrade, rollback, and compatibility gates. It ships:
+*Version 1.0.0-rc.2*
 
-- A Node.js 24 and strict TypeScript 6 workspace.
-- A contract-validated Express 5 API.
-- Validated environment configuration.
-- Structured JSON logging with credential redaction.
-- Separate liveness and readiness endpoints.
-- RFC 9457-compatible error responses.
-- Automated lint, format, type, test, and build checks.
-- SQLite persistence with reviewed Drizzle migrations and WAL-mode safety controls.
-- Better Auth email/password sessions, organization roles, and organization-owned API-key support.
-- A race-safe initial setup endpoint that atomically creates the first owner, organization, project,
-  and audit event.
-- Tenant-isolated project, membership, project API-key, and audit APIs.
-- Tenant-scoped local and S3-compatible storage engines with immutable streaming writes.
-- Streaming simple uploads with size limits, project quota reservations, optional SHA-256 checks,
-  MIME/extension/signature validation, idempotent replay, and interrupted-upload reconciliation.
-- Authenticated tus 1.0 resumable uploads with creation, expiry, SHA-1/SHA-256 chunk checksums,
-  termination, durable offsets, and restart reconciliation.
-- Immutable original-asset delivery over local or S3-compatible storage, including authenticated
-  reads, expiring signed URLs, conditional requests, and single byte ranges.
-- Project-scoped storage usage, quota, health, derivative-cache, and sanitized failure diagnostics.
-- A standalone crash-safe worker that performs bounded image, video, PDF, and Office inspection
-  before making an asset ready.
-- A versioned, canonical image-transform grammar and an audited API for immutable named preset
-  versions.
-- Synchronous image transformation URLs with deterministic cache identities, single-flight
-  generation, content negotiation, immutable validators, and signed private delivery.
-- Durable asynchronous video posters, bounded clips and MP4/WebM transcodes, PDF thumbnails and
-  text extraction, and Office-to-PDF previews.
-- Tenant-scoped derivative status, authenticated delivery, explicit cache invalidation, retry-safe
-  leases, processor versioning, and audited lifecycle events.
-- OpenAPI 3.1 JSON at `/openapi.json` and an interactive reference at `/docs`.
-- A responsive React dashboard for first-run setup, projects, uploads, asset metadata and privacy,
-  presets, jobs, storage health, API keys, and audit history.
-- A read-only `doctor` command with configuration, SQLite, permission, and media-tool diagnostics.
-- A hardened three-service Docker Compose deployment with a Caddy TLS/static edge, internal API,
-  internal worker, persistent data volumes, and operator backup/upgrade guidance.
-- Optional hybrid lexical/vector media search with project isolation, privacy controls, budgets,
-  evaluation gates, and a separately activated AI worker.
-- Deterministic, exact-target agent plans with immutable hashes, administrator approval, single-use
-  execution, cancellation, audit history, and worker-side revalidation.
-- An optional project-scoped stdio MCP server whose mutation-capable tool can request human review
-  but cannot approve or execute its own plan.
-- Reproducible metadata, local-delivery, and image-transformation benchmarks; automated dependency
-  and CodeQL checks; multi-architecture image builds with SBOM, provenance, vulnerability scanning,
-  and keyless signatures; and an evidence-based release checklist.
+> **Release status:** `1.0.0-rc.2` is a hardened release candidate, not the final v1 release. Core
+> local verification is complete; hosted release, independent review, ARM64 hardware, and extended
+> operational acceptance gates remain open.
 
-AI and agent features remain explicitly optional. The API and worker must both be running for
-uploads to become ready and for queued derivatives or approved agent changes to complete.
+## What Aeonic does
 
-## Requirements
+- **Manage media:** upload, inspect, organize, search, and control access to media in isolated
+  organizations and projects.
+- **Process and deliver:** create deterministic image transformations, video derivatives, document
+  previews, and expiring signed delivery URLs.
+- **Operate with confidence:** use resumable uploads, storage quotas, audit history, health checks,
+  backup guidance, and a dedicated media worker.
+- **Add intelligence when useful:** enable semantic media search and approval-gated workflow agents
+  without affecting uploads, transformations, or delivery when AI is disabled.
+
+Aeonic supports images, videos, PDFs, and LibreOffice-readable office documents. ZIP archives are
+not catalog assets in v1. See the [support matrix](docs/support-matrix.md) for the complete release
+candidate scope.
+
+## Run Aeonic locally with Docker
+
+Docker Compose is the supported deployment path for v1. You need Docker Engine or Docker Desktop
+with Compose v2, Git, and OpenSSL.
+
+### 1. Configure the installation
+
+```bash
+cp .env.compose.example .env
+```
+
+Generate two independent secrets:
+
+```bash
+openssl rand -base64 48
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
+```
+
+Open `.env` and replace:
+
+- `BETTER_AUTH_SECRET` with the first value.
+- The value after `primary:` in `DELIVERY_SIGNING_KEYS` with the second value.
+
+Keep `AEONIC_ORIGIN=https://localhost` for local evaluation. Never commit `.env`.
+
+### 2. Build and start
+
+```bash
+docker compose config --quiet
+docker compose build
+docker compose run --rm worker --enable-source-maps dist/doctor.js
+docker compose up -d
+docker compose ps
+```
+
+The doctor checks configuration, SQLite, storage permissions, Sharp, FFmpeg, Poppler, and
+LibreOffice before startup.
+
+### 3. Complete first-run setup
+
+Open <https://localhost>. Caddy uses a local certificate authority for the default development
+origin, so your browser may require you to explicitly trust its local certificate.
+
+The first-run screen creates the installation owner, organization, and first project. Save the
+owner password in a password manager: Aeonic does not retain a recoverable copy.
+
+Useful local endpoints:
+
+- Dashboard: <https://localhost>
+- API reference: <https://localhost/docs>
+- OpenAPI 3.1 document: <https://localhost/openapi.json>
+- Readiness: <https://localhost/health/ready>
+
+### Common local commands
+
+```bash
+docker compose ps
+docker compose logs --tail=200 api worker edge
+docker compose run --rm worker --enable-source-maps dist/doctor.js
+docker compose down
+```
+
+`docker compose down` retains named volumes. Do **not** use `docker compose down -v` unless you
+intend to permanently delete Aeonic's local application data.
+
+For a domain, certificate trust, backup, and network-boundary guidance, continue with the
+[Docker Compose deployment guide](docs/deployment.md). Review [upgrade and rollback](docs/upgrade.md)
+before changing versions.
+
+## Develop from source
+
+Source development requires:
 
 - Node.js 24 LTS
 - pnpm 11.25.0 through Corepack
 - FFmpeg and ffprobe
-- Poppler utilities (`pdfinfo`, `pdftotext`, and `pdftoppm`)
-- LibreOffice for Office document previews
+- Poppler utilities: `pdfinfo`, `pdftotext`, and `pdftoppm`
+- LibreOffice for office-document previews
 
-## Development
+Install and verify the workspace:
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
 pnpm check
-pnpm dev
 ```
 
-Run the API and media worker in separate terminals. Both processes must use the same database and
-storage configuration:
+Run the API and dashboard in one terminal, then the media worker in another. Both processes must
+use the same database and storage configuration.
 
 ```bash
-pnpm --filter @aeonic/api dev
+# Terminal 1: API and dashboard
+pnpm dev
+
+# Terminal 2: media worker
 pnpm --filter @aeonic/api dev:worker
 ```
 
-The API listens on `http://localhost:3001` by default. The dashboard listens on
-`http://localhost:4173` and proxies local API requests to port 3001.
+The development dashboard runs at <http://localhost:4173> and proxies API requests to
+<http://localhost:3001>. Direct runtime processes read configuration from their environment; they
+do not automatically load `.env` files.
+
+Before submitting a change, run:
 
 ```bash
-curl http://localhost:3001/health/live
-curl http://localhost:3001/health/ready
-curl http://localhost:3001/api/v1/setup
+pnpm check
 ```
 
-Open <http://localhost:3001/docs> for the interactive API reference, or consume the machine-readable
-document at <http://localhost:3001/openapi.json>.
+This verifies release metadata, formatting, lint, strict types, tests, and production builds. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete contribution workflow.
 
-The simple-upload endpoint accepts exactly one raw media file per request. For example, after
-signing in and retaining the session cookie:
+## Use the API
 
-```bash
-curl --request POST \
-  --cookie cookies.txt \
-  --header 'Content-Type: image/jpeg' \
-  --data-binary @photo.jpg \
-  'http://localhost:3001/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/uploads?filename=photo.jpg'
-```
+Aeonic exposes a versioned REST API and publishes its OpenAPI 3.1 contract at `/openapi.json`. The
+interactive reference at `/docs` documents authentication, request bodies, responses, and error
+schemas for the exact running version.
 
-Service clients can send a project-scoped `assets:write` key in `x-api-key`. Supply
-`Content-Digest: sha-256=:BASE64_DIGEST:` when end-to-end checksum verification is needed. Simple
-uploads require `Content-Length`, default to private visibility, are limited to 100 MiB, and share a
-configurable 10 GiB quota per project.
+The API supports:
 
-For unreliable networks and large files, use a tus 1.0 client with the project creation endpoint:
+- Secure browser sessions and project-scoped API keys
+- Simple streaming and tus 1.0 resumable uploads
+- Original and derived media delivery
+- Canonical image transformation URLs and named presets
+- Asynchronous video and document derivatives
+- Storage, quota, job, audit, and project administration
+- Optional lexical/vector search and approval-gated media workflows
 
-```text
-/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/tus
-```
+Use `x-api-key` for service clients and a cookie session for browser-oriented workflows. Error
+responses follow RFC 9457 problem details. Consult the interactive reference for canonical endpoint
+shapes rather than copying identifiers from examples.
 
-Aeonic advertises `creation`, `expiration`, `checksum`, and `termination`. Clients must provide a
-known `Upload-Length` and Base64-encoded `filename` and `filetype` metadata. The default resumable
-limit is 5 GiB and unfinished uploads expire after 24 hours of inactivity. The staging directory
-must be placed on persistent storage; completed bytes are moved into the configured local or
-S3-compatible backend only after integrity and media-type validation.
+Public compatibility guarantees are defined in [API stability and deprecation](docs/api-stability.md).
 
-Project usage, active reservations, remaining quota, backend health, and sanitized failure codes
-are available from:
+## Optional intelligence
 
-```text
-/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/storage
-```
+AI features are disabled by default. Core upload, catalog, transformation, search, and delivery
+remain available without an external provider or vector database.
 
-Ready public assets have immutable canonical URLs and may be fetched directly. Private assets can
-be read with a cookie session or an `assets:read` project key, or shared temporarily by creating a
-signed URL:
+- [Optional semantic search](docs/semantic-search.md) explains provider configuration, privacy,
+  spend ceilings, index evaluation, activation, and rollback.
+- [Approval-gated media workflows](docs/agent-workflows.md) explains immutable plans, human
+  approval, exact-target execution, and the optional MCP server.
 
-```bash
-curl --request POST \
-  --cookie cookies.txt \
-  --header 'Content-Type: application/json' \
-  --data '{"expiresInSeconds":900,"disposition":"attachment"}' \
-  'http://localhost:3001/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/assets/PUBLIC_ID/versions/1/delivery-url'
-```
+## Architecture at a glance
 
-The response URL is a bearer capability: keep its full query string private and do not modify it.
-Signed URLs expire after 15 minutes by default. Documents are always served as attachments; images
-and videos default to inline. Delivery supports `GET`, `HEAD`, validators, and one RFC byte range.
-Use the interactive API reference for the authenticated and canonical URL shapes.
+The supported Compose deployment contains three production services:
 
-Ready video and document versions accept asynchronous derivative requests at:
+- **Edge:** Caddy terminates TLS, serves the dashboard, and proxies API traffic.
+- **API:** Express provides authentication, project control, uploads, delivery, and job
+  coordination.
+- **Worker:** a separate process inspects media and produces bounded image, video, PDF, and office
+  derivatives.
 
-```text
-/api/v1/organizations/ORGANIZATION_ID/projects/PROJECT_ID/assets/PUBLIC_ID/versions/1/derivatives
-```
+SQLite and local object data live on persistent storage shared by the API and worker. S3-compatible
+object storage is optional. The API and worker are internal services; only the edge publishes host
+ports.
 
-The response is immediately reusable as the status resource. Requests with the same source digest,
-canonical operation, output format, and processor revision share one cache identity. Completed
-content is available through the authenticated `contentPath` in the response; deleting the status
-resource explicitly invalidates its cached output.
+## Documentation
 
-Use [`.env.example`](./.env.example) as the configuration reference. Environment variables can be
-provided by your shell or process supervisor; automatic `.env` file loading is not currently part
-of the runtime.
-
-## Docker Compose
-
-The optional AI profile is documented in [Optional semantic search](docs/semantic-search.md). Core services do not require it.
-
-The optional stdio MCP server and its human approval boundary are documented in
-[Approval-gated media workflows](docs/agent-workflows.md).
-
-Public contract guarantees and supported environments are documented in
-[API stability and deprecation](docs/api-stability.md) and the [support matrix](docs/support-matrix.md).
-Release candidates follow the evidence-based [release checklist](docs/release-checklist.md).
-
-For a no-CLI-after-installation experience, follow [the Compose deployment guide](./docs/deployment.md).
-It covers secret generation, TLS, first-run setup, diagnostics, backup, and recovery. Review
-[the upgrade and rollback guide](./docs/upgrade.md) before changing versions.
-
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `pnpm dev` | Build workspace dependencies and run development watchers |
-| `pnpm --filter @aeonic/api dev:worker` | Run the media worker in watch mode |
-| `pnpm --filter @aeonic/api start:worker` | Run the compiled media worker |
-| `pnpm --filter @aeonic/api run doctor` | Run read-only deployment diagnostics after building |
-| `pnpm build` | Produce clean ESM output for every package |
-| `pnpm --filter @aeonic/api db:migrate` | Apply checked-in database migrations |
-| `pnpm --filter @aeonic/api auth:schema` | Regenerate the Better Auth Drizzle schema |
-| `pnpm --filter @aeonic/api db:generate` | Generate a reviewed migration after schema changes |
-| `pnpm test` | Run the test suite |
-| `pnpm --filter @aeonic/api test:s3` | Run the opt-in live S3 compatibility contract |
-| `pnpm bench:delivery` | Benchmark 1 MiB local original delivery at 100 requests per second |
-| `pnpm bench:transform` | Benchmark the deterministic 12-megapixel image transform fixture |
-| `pnpm bench:metadata` | Benchmark the authenticated metadata API with 100,000 assets |
-| `pnpm security:audit` | Fail on high or critical production dependency advisories |
-| `pnpm release:verify` | Check version, image, documentation, and workflow metadata consistency |
-| `pnpm typecheck` | Run strict TypeScript checks |
-| `pnpm lint` | Run static analysis |
-| `pnpm format:check` | Verify formatting |
-| `pnpm check` | Run the complete local/CI quality gate |
+| Goal | Guide |
+| --- | --- |
+| Deploy and operate Aeonic | [Docker Compose deployment](docs/deployment.md) |
+| Upgrade, restore, or roll back | [Upgrade and rollback](docs/upgrade.md) |
+| Understand supported environments and media | [Support matrix](docs/support-matrix.md) |
+| Configure optional semantic retrieval | [Optional semantic search](docs/semantic-search.md) |
+| Connect approval-gated agent tools | [Media workflow agents](docs/agent-workflows.md) |
+| Understand compatibility guarantees | [API stability and deprecation](docs/api-stability.md) |
+| Review security controls and manual gates | [Security verification](docs/security-verification.md) |
+| Reproduce performance checks | [Performance verification](docs/performance.md) |
+| Evaluate a release candidate | [Release checklist](docs/release-checklist.md) |
+| Review user-visible release changes | [Changelog](CHANGELOG.md) |
 
 ## Repository layout
 
 ```text
 apps/
-  api/                 Express control-plane API
+  api/                 Express API, workers, MCP server, and persistence
   dashboard/           React and Vite operator workspace
 packages/
   contracts/           Transport schemas and shared public types
-scripts/               Repository maintenance scripts
+docs/                  Public operator, API, security, and release guidance
+scripts/               Verification, maintenance, and benchmark tools
 ```
 
-Architecture research and internal planning are maintained separately from this source repository.
-User-facing documentation will expand only as corresponding behavior ships.
+Internal architecture research and planning are maintained separately from the public source
+repository.
 
-## Contributing
+## Security
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). Security issues should follow
-[SECURITY.md](./SECURITY.md).
+Do not report suspected vulnerabilities in a public issue. Follow [SECURITY.md](SECURITY.md) to use
+the repository's private reporting flow.
 
 ## License
 
-[MIT](./LICENSE)
+Aeonic is available under the [MIT License](LICENSE).
